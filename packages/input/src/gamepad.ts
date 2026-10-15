@@ -166,7 +166,14 @@ export class GamepadInput {
    */
   flush(): void {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return
-    if (this.gated && !this.active && !this.forced) return
+    if (this.gated && !this.active && !this.forced) {
+      // Asleep (no pad): the edges of the frame that put us to sleep (a disconnect) must not linger.
+      for (const state of this.pads) {
+        state.justPressed.clear()
+        state.justReleased.clear()
+      }
+      return
+    }
     const pads = navigator.getGamepads()
     let any = false
     for (let i = 0; i < this.pads.length; i++) {
@@ -176,8 +183,13 @@ export class GamepadInput {
       const gp = pads[i]
       if (!gp) {
         if (state.connected) {
-          // Disconnected mid-session: clear everything so held buttons don't stick.
+          // Disconnected mid-session: clear everything so held buttons don't stick, and release them
+          // (edges) so listeners see the buttons go up; zero the analog values so a stick/trigger
+          // that was pushed at unplug time doesn't keep reading its last value.
+          for (const id of state.held) state.justReleased.add(id)
           state.held.clear()
+          state.axes.fill(0)
+          state.triggers.fill(0)
           state.connected = false
         }
         continue
@@ -246,18 +258,14 @@ export class GamepadInput {
 
   /**
    * Analog stick axis −1..1 with dead zone applied.
-   * @param axis 'x' or 'y'. +y is DOWN (screen convention).
+   * @param axis 'x' or 'y'. +y is DOWN (screen convention): the W3C standard mapping already reports
+   * up as −1 and down as +1, so the browser value is returned as is.
    */
   getStick(stick: 'left' | 'right', axis: 'x' | 'y', playerIndex = 0): number {
     const pad = this.pads[playerIndex]
     if (!pad) return 0
     const idx = (stick === 'left' ? 0 : 2) + (axis === 'x' ? 0 : 1)
-    let v = pad.axes[idx] ?? 0
-    if (stick === 'left' || stick === 'right') {
-      // Browser Y axis: −1 = up. Flip so +y means down, matching screen space.
-      if (axis === 'y') v = -v
-    }
-    return v
+    return pad.axes[idx] ?? 0
   }
 
   /** Dead zone for stick reads (default 0.15). */
