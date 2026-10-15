@@ -1067,6 +1067,12 @@ export class RenderSystem implements System {
   /** Active tints that take part in the sprite sort via `layer` / `zIndex`. */
   private readonly _sortedTints: TintSlot[] = []
   private _layerImageTextures = new WeakMap<object, { tex: WebGLTexture; ver: number; w: number; h: number }>()
+  /** Weak index of the entries above, so dispose() can free textures a WeakMap cannot enumerate. */
+  private _layerImageEntries = new Set<WeakRef<{ tex: WebGLTexture }>>()
+  /** Set by dispose(): late image loads must not allocate GL objects nobody will free. */
+  private _disposed = false
+  private quadBuf: WebGLBuffer | null = null
+  private fullscreenBuf: WebGLBuffer | null = null
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
   private readonly _layerCam: LayerCamera = {
     x: 0,
@@ -1665,6 +1671,7 @@ export class RenderSystem implements System {
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
     this._layerImageTextures = new WeakMap()
+    this._layerImageEntries.clear()
     this._ppBloomExtractProg = null
     this._ppFBOW = this._ppFBOH = 0
     this._stackTex = null
@@ -1709,6 +1716,7 @@ export class RenderSystem implements System {
     const { gl, canvas } = this
     canvas.removeEventListener?.('webglcontextlost', this.onContextLost)
     canvas.removeEventListener?.('webglcontextrestored', this.onContextRestored)
+    this._disposed = true
     if (gl.isContextLost()) return
     for (const tex of this.textures.values()) gl.deleteTexture(tex)
     for (const tex of this.shapeTextures.values()) gl.deleteTexture(tex)
@@ -1723,6 +1731,25 @@ export class RenderSystem implements System {
     gl.deleteVertexArray(this.quadVAO)
     gl.deleteVertexArray(this.parallaxVAO)
     gl.deleteBuffer(this.instanceBuffer)
+    if (this.quadBuf) gl.deleteBuffer(this.quadBuf)
+    if (this.fullscreenBuf) gl.deleteBuffer(this.fullscreenBuf)
+    for (const ref of this._layerImageEntries) {
+      const t = ref.deref()
+      if (t) gl.deleteTexture(t.tex)
+    }
+    this._layerImageEntries.clear()
+    this._layerImageTextures = new WeakMap()
+    for (const p of [this._ppBloomExtractProg, this._ppBlurProg, this._ppCompositeProg]) if (p) gl.deleteProgram(p)
+    for (const fbo of [this._ppSceneFBO, this._ppBloomExtractFBO, this._ppBlurFBO1, this._ppBlurFBO2]) {
+      if (fbo) gl.deleteFramebuffer(fbo)
+    }
+    for (const tex of [this._ppSceneTex, this._ppBloomExtractTex, this._ppBlurTex1, this._ppBlurTex2]) {
+      if (tex) gl.deleteTexture(tex)
+    }
+    this._ppBloomExtractProg = this._ppBlurProg = this._ppCompositeProg = null
+    this._ppSceneFBO = this._ppBloomExtractFBO = this._ppBlurFBO1 = this._ppBlurFBO2 = null
+    this._ppSceneTex = this._ppBloomExtractTex = this._ppBlurTex1 = this._ppBlurTex2 = null
+    this._ppFBOW = this._ppFBOH = 0
     if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
     if (this._idleTex) gl.deleteTexture(this._idleTex)
     if (this._stackTex) gl.deleteTexture(this._stackTex)
@@ -1757,7 +1784,7 @@ export class RenderSystem implements System {
     gl.bindVertexArray(this.quadVAO)
 
     // Per-vertex buffer
-    const quadBuf = gl.createBuffer()!
+    const quadBuf = (this.quadBuf = gl.createBuffer()!)
     gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf)
     gl.bufferData(gl.ARRAY_BUFFER, quadVerts, gl.STATIC_DRAW)
 
@@ -1815,7 +1842,7 @@ export class RenderSystem implements System {
     this.parallaxVAO = gl.createVertexArray()!
     gl.bindVertexArray(this.parallaxVAO)
 
-    const fsBuf = gl.createBuffer()!
+    const fsBuf = (this.fullscreenBuf = gl.createBuffer()!)
     gl.bindBuffer(gl.ARRAY_BUFFER, fsBuf)
     gl.bufferData(gl.ARRAY_BUFFER, fsVerts, gl.STATIC_DRAW)
     gl.enableVertexAttribArray(0)
@@ -1924,6 +1951,7 @@ export class RenderSystem implements System {
       img.src = imgSrc
       const tiled = src.includes(':repeat')
       img.onload = () => {
+        if (this._disposed) return
         const gl = this.gl
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
@@ -1960,6 +1988,7 @@ export class RenderSystem implements System {
       img = new Image()
       img.src = src
       img.onload = () => {
+        if (this._disposed) return
         const gl = this.gl
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
@@ -2293,6 +2322,7 @@ export class RenderSystem implements System {
       el.src = src
       this.imageCache.set(src, el)
       el.onload = () => {
+        if (this._disposed) return
         const gl = this.gl
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
@@ -2614,6 +2644,7 @@ export class RenderSystem implements System {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
         t = { tex, ver, w: iw, h: ih }
         this._layerImageTextures.set(img, t)
+        this._layerImageEntries.add(new WeakRef(t))
       } else if (t.ver !== ver || t.w !== iw || t.h !== ih) {
         // The source changed (markAtlasDirty) or was resized: upload it again.
         gl.bindTexture(gl.TEXTURE_2D, t.tex)
