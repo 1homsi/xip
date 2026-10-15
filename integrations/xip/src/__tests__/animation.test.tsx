@@ -19,7 +19,7 @@ function makeEngine(): EngineState {
     assets: new AssetManager(),
     input: {} as never,
     physics: { setGravity: vi.fn() } as never,
-    loop: {} as never,
+    loop: { markDirty: vi.fn() } as never,
     canvas: document.createElement('canvas'),
     entityIds: new Map(),
     systemTimings: new Map(),

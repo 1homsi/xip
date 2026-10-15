@@ -16,6 +16,7 @@ export function Transform({ x = 0, y = 0, rotation = 0, scaleX = 1, scaleY = 1 }
 
   useEffect(() => {
     engine.ecs.addComponent(entityId, createTransform(x, y, rotation, scaleX, scaleY))
+    engine.loop.markDirty()
     return () => engine.ecs.removeComponent(entityId, 'Transform')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -30,6 +31,8 @@ export function Transform({ x = 0, y = 0, rotation = 0, scaleX = 1, scaleY = 1 }
       comp.scaleX = scaleX
       comp.scaleY = scaleY
     }
+    // An onDemand loop only repaints when woken; a prop change driven from outside the canvas must wake it.
+    engine.loop.markDirty()
   }, [x, y, rotation, scaleX, scaleY, engine, entityId])
 
   return null

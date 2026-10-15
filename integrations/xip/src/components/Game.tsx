@@ -520,6 +520,8 @@ export function Game({
     if (canvas.height !== physH) canvas.height = physH
     canvas.style.width = `${width}px`
     canvas.style.height = `${height}px`
+    // Resizing the backing store clears the drawing buffer; an onDemand loop must repaint it.
+    engine.loop.markDirty()
   }, [width, height, engine, dpr])
 
   // Sync gravity changes
