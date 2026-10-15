@@ -72,13 +72,39 @@ describe('GamepadInput', () => {
     expect(gp.isDown(GamepadButton.Start)).toBe(false)
   })
 
-  it('applies dead zone to sticks and flips Y to screen convention', () => {
+  it('applies dead zone to sticks and keeps the browser Y sign (+y is down, as on screen)', () => {
     mockPads[0] = makePad()
     mockPads[0]!.axes = [0.5, -1, 0.05, 0]
     gp.flush()
     expect(gp.getStick('left', 'x')).toBe(0.5)
-    expect(gp.getStick('left', 'y')).toBe(1) // browser −1(up) → +1(down)
+    expect(gp.getStick('left', 'y')).toBe(-1) // stick pushed UP: standard mapping reports -1 = up
     expect(gp.getStick('right', 'x')).toBe(0) // inside dead zone
+    mockPads[0]!.axes = [0, 1, 0, 0.8]
+    gp.flush()
+    expect(gp.getStick('left', 'y')).toBe(1) // pushed DOWN = +1, like ArrowDown and gamepad:LY+
+    expect(gp.getStick('right', 'y')).toBe(0.8)
+    expect(gp.isDown('gamepad:LY+')).toBe(true)
+  })
+
+  it('zeroes sticks and triggers and releases held buttons when the pad disappears', () => {
+    mockPads[0] = makePad()
+    mockPads[0]!.axes = [1, 1, 0, 0]
+    mockPads[0]!.buttons[7] = { pressed: true, value: 1 }
+    mockPads[0]!.buttons[GamepadButton.A].pressed = true
+    gp.flush()
+    expect(gp.getStick('left', 'x')).toBe(1)
+    expect(gp.getTrigger('right')).toBe(1)
+
+    mockPads[0] = null
+    gp.flush()
+    expect(gp.getStick('left', 'x')).toBe(0)
+    expect(gp.getStick('left', 'y')).toBe(0)
+    expect(gp.getTrigger('right')).toBe(0)
+    expect(gp.isDown(GamepadButton.A)).toBe(false)
+    expect(gp.isReleased(GamepadButton.A)).toBe(true)
+    expect(gp.isReleased('gamepad:LX+')).toBe(true)
+    gp.flush()
+    expect(gp.isReleased(GamepadButton.A)).toBe(false)
   })
 
   it('reads analog trigger values', () => {
