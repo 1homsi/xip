@@ -1,0 +1,52 @@
+import { performance } from 'node:perf_hooks'
+import { SpriteLayer } from '../packages/renderer/src/spriteLayer.ts'
+
+const args = process.argv.slice(2).filter((arg) => arg !== '--')
+const count = Number(args[0] ?? 3000)
+const frames = Number(args[1] ?? 1000)
+const changed = Math.min(32, count)
+const layer = new SpriteLayer({ capacity: count, sortByKey: true })
+for (let i = 0; i < count; i++) {
+  layer.add(i, 0, 1, 1)
+  layer.sortKey[i] = i
+}
+layer.drawOrder()
+
+const baselineOrder = Int32Array.from({ length: count }, (_, i) => i)
+const baselineKeys = new Float64Array(count)
+for (let i = 0; i < count; i++) baselineKeys[i] = i
+
+function measure(fn: () => void): number {
+  for (let i = 0; i < 100; i++) fn()
+  const samples: number[] = []
+  for (let run = 0; run < 5; run++) {
+    const start = performance.now()
+    for (let frame = 0; frame < frames; frame++) fn()
+    samples.push(((performance.now() - start) * 1000) / frames)
+  }
+  return samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)]
+}
+
+let tick = 0
+const fullSortUs = measure(() => {
+  tick++
+  for (let i = 0; i < changed; i++) baselineKeys[i] = i + Math.sin(tick + i) * 0.1
+  baselineOrder.sort((a, b) => baselineKeys[a] - baselineKeys[b] || a - b)
+})
+
+tick = 0
+const retainedUs = measure(() => {
+  tick++
+  for (let i = 0; i < changed; i++) layer.sortKey[i] = i + Math.sin(tick + i) * 0.1
+  layer.touchRange(0, changed - 1)
+  layer.drawOrder()
+})
+
+const cachedUs = measure(() => {
+  layer.drawOrder()
+})
+
+console.log(`sorted sprites: ${count}; changed keys/frame: ${changed}; frames/run: ${frames}; median of 5 runs`)
+console.log(`full sort: ${fullSortUs.toFixed(2)} µs/frame`)
+console.log(`touched-order fix-up: ${retainedUs.toFixed(2)} µs/frame (${(fullSortUs / retainedUs).toFixed(1)}x vs full sort)`)
+console.log(`unchanged cached order: ${cachedUs.toFixed(3)} µs/frame`)

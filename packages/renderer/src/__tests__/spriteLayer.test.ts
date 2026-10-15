@@ -102,8 +102,10 @@ describe('SpriteLayer', () => {
     // pick follows draw order: the y=30 sprite is drawn last, so it wins on overlap
     layer.y[1] = 30
     layer.sortKey[1] = 31
+    layer.touchRange(1)
     expect(layer.pick(0, 30)).toBe(101)
     layer.sortKey[1] = 29
+    layer.touchRange(1)
     expect(layer.pick(0, 30)).toBe(100)
   })
 

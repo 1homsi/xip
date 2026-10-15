@@ -45,11 +45,14 @@ describe('SpriteLayer depth sort', () => {
     const l = make(6, (i) => 6 - i)
     l.flags[1] |= SPRITE_HIDDEN
     l.flags[4] |= SPRITE_HIDDEN
+    l.touchRange(1, 4)
     expect(order(l)).toEqual([5, 3, 2, 0])
     expect(l.orderCount).toBe(4)
     l.flags[4] &= ~SPRITE_HIDDEN
+    l.touchRange(4)
     expect(order(l)).toEqual([5, 4, 3, 2, 0])
     l.flags[1] &= ~SPRITE_HIDDEN
+    l.touchRange(1)
     expect(order(l)).toEqual([5, 4, 3, 2, 1, 0])
   })
 
@@ -61,8 +64,10 @@ describe('SpriteLayer depth sort', () => {
     l.ids[1] = 101
     expect(l.pick(0, 0)).toBe(101)
     l.sortKey[1] = -1
+    l.touchRange(1)
     expect(l.pick(0, 0)).toBe(100)
     l.flags[0] |= SPRITE_HIDDEN
+    l.touchRange(0)
     expect(l.pick(0, 0)).toBe(101)
   })
 
@@ -90,6 +95,7 @@ describe('SpriteLayer depth sort', () => {
     order(l)
     sort.mockClear()
     for (let i = 0; i < 3000; i++) l.sortKey[i] = 3000 - i // fully reversed
+    l.touchRange(0, l.count - 1)
     expect(order(l)).toEqual(reference(l))
     expect(sort).toHaveBeenCalledTimes(1)
     sort.mockRestore()
@@ -107,9 +113,14 @@ describe('SpriteLayer depth sort', () => {
         l.sortKey[i] = Math.floor(rnd() * 10)
         l.sortKey2![i] = Math.floor(rnd() * 3)
       } else if (op === 1 && l.count > 5) l.removeAt((rnd() * l.count) | 0)
-      else if (op === 2 && l.count > 0) l.flags[(rnd() * l.count) | 0] ^= SPRITE_HIDDEN
+      else if (op === 2 && l.count > 0) {
+        const i = (rnd() * l.count) | 0
+        l.flags[i] ^= SPRITE_HIDDEN
+        l.touchRange(i)
+      }
       else if (op === 3 && l.count > 0) {
         for (let k = 0; k < 5; k++) l.sortKey[(rnd() * l.count) | 0] = Math.floor(rnd() * 10)
+        l.touchRange(0, l.count - 1)
       } else if (op === 4 && rnd() < 0.2) {
         l.clear()
         for (let i = 0; i < 20; i++) {
@@ -120,6 +131,20 @@ describe('SpriteLayer depth sort', () => {
       }
       expect(order(l)).toEqual(reference(l))
     }
+  })
+
+  it('reuses the sorted order until a touched key changes and fixes up only touched slots', () => {
+    const sort = vi.spyOn(Int32Array.prototype, 'sort')
+    const l = make(1000, (i) => i)
+    const cached = l.drawOrder()
+    sort.mockClear()
+    expect(l.drawOrder()).toBe(cached)
+    expect(sort).not.toHaveBeenCalled()
+    l.sortKey[700] = 12.5
+    l.touchRange(700)
+    expect(order(l)).toEqual(reference(l))
+    expect(sort).not.toHaveBeenCalled()
+    sort.mockRestore()
   })
 
   it('without sortByKey the order is slot order', () => {

@@ -251,6 +251,15 @@ export class SpriteLayer {
   private _order = new Int32Array(0)
   private _inOrder = new Uint8Array(0)
   private _orderCount = 0
+  private _orderKey = new Float64Array(0)
+  private _orderKey2 = new Float64Array(0)
+  private _orderFlags = new Uint8Array(0)
+  private _orderDirtyAll = true
+  private _orderDirtyLo = 0x7fffffff
+  private _orderDirtyHi = -1
+  private _orderedSlotCount = 0
+  /** True when the most recent drawOrder call changed sorted membership or positions. */
+  orderChanged = true
   /** Sprites in the last {@link drawOrder} (visible ones only when `sortByKey`). */
   orderCount = 0
 
@@ -503,6 +512,7 @@ export class SpriteLayer {
   }
 
   clear(): void {
+    if (this.count > 0) this.markSlots(0, this.count - 1)
     this.count = 0
     this.changed()
   }
@@ -514,6 +524,7 @@ export class SpriteLayer {
    */
   touch(): void {
     this._dAll = true
+    this._orderDirtyAll = true
     this.changed()
   }
 
@@ -531,6 +542,8 @@ export class SpriteLayer {
   markSlots(lo: number, hi: number): void {
     if (lo < this._dLo) this._dLo = lo
     if (hi > this._dHi) this._dHi = hi
+    if (lo < this._orderDirtyLo) this._orderDirtyLo = lo
+    if (hi > this._orderDirtyHi) this._orderDirtyHi = hi
   }
 
   /**
@@ -559,10 +572,9 @@ export class SpriteLayer {
   /**
    * Draw order (indices into the arrays): ascending `sortKey`, then `sortKey2`,
    * then slot, over the first {@link orderCount} entries. With `sortByKey` hidden
-   * sprites are left out; without it this is slot order. Updated incrementally from
-   * the previous order whatever changed in between (keys drifting, `clear()` + `add()`
-   * rebuilds, swap-removes, flag toggles): near-linear when the order is mostly kept,
-   * with a fallback to a full sort when it is not.
+   * sprites are left out; without it this is slot order. The cached order is only
+   * fixed up for slots reported by `touchRange` (or layer methods) and reused until
+   * another touch.
    */
   drawOrder(): Int32Array {
     const n = this.count
@@ -574,9 +586,20 @@ export class SpriteLayer {
       const inOrder = new Uint8Array(cap)
       inOrder.set(this._inOrder)
       this._inOrder = inOrder
+      const keys = new Float64Array(cap)
+      keys.set(this._orderKey)
+      this._orderKey = keys
+      const keys2 = new Float64Array(cap)
+      keys2.set(this._orderKey2)
+      this._orderKey2 = keys2
+      const flagsCopy = new Uint8Array(cap)
+      flagsCopy.set(this._orderFlags)
+      this._orderFlags = flagsCopy
+      this._orderDirtyAll = true
     }
     const order = this._order
     if (!this.sortByKey) {
+      this.orderChanged = false
       for (let i = 0; i < n; i++) order[i] = i
       this.orderCount = n
       if (this._orderCount !== 0) {
@@ -585,46 +608,99 @@ export class SpriteLayer {
       }
       return order
     }
+    if (!this._orderDirtyAll && this._orderDirtyHi < this._orderDirtyLo) {
+      this.orderChanged = false
+      this.orderCount = this._orderCount
+      this._orderedSlotCount = n
+      return order
+    }
     const inOrder = this._inOrder
     const flags = this.flags
-    // Keep the previous order minus sprites that are gone or hidden now ...
-    let m = 0
-    for (let k = 0; k < this._orderCount; k++) {
-      const i = order[k]
-      if (i < n && (flags[i] & SPRITE_HIDDEN) === 0) order[m++] = i
-      else inOrder[i] = 0
-    }
-    // ... then append visible sprites that were not in it (new slots, shown again).
-    for (let i = 0; i < n; i++) {
-      if (inOrder[i] === 0 && (flags[i] & SPRITE_HIDDEN) === 0) {
-        order[m++] = i
-        inOrder[i] = 1
-      }
-    }
-    this._orderCount = m
-    this.orderCount = m
     const K = this.sortKey
     const K2 = this.sortKey2
-    // Insertion sort is O(m) for an almost-sorted order; bail out to a full sort if it is not.
-    let budget = 8 * m + 256
-    for (let i = 1; i < m; i++) {
-      const v = order[i]
-      const k = K[v]
-      let j = i - 1
-      while (j >= 0) {
-        const a = order[j]
-        const ka = K[a]
-        if (ka < k || (ka === k && !this.after(a, v, K2))) break
-        order[j + 1] = a
-        j--
-        if (--budget < 0) {
-          order[j + 1] = v
-          this.fullSort(order, m, K, K2)
-          return order
+    const dirtyAll = this._orderDirtyAll
+    const lo = dirtyAll ? 0 : Math.max(0, this._orderDirtyLo)
+    const hi = dirtyAll ? Math.max(n - 1, this._orderCount - 1) : Math.max(lo - 1, this._orderDirtyHi)
+    let membershipChanged = false
+    let keysChanged = false
+    if (this._orderCount === 0) {
+      for (let i = 0; i < n; i++) {
+        if ((flags[i] & SPRITE_HIDDEN) === 0) {
+          order[this._orderCount++] = i
+          inOrder[i] = 1
+        }
+        this._orderKey[i] = K[i]
+        this._orderKey2[i] = K2 ? K2[i] : 0
+        this._orderFlags[i] = flags[i] & SPRITE_HIDDEN
+      }
+      this.fullSort(order, this._orderCount, K, K2)
+      this.orderChanged = true
+      this.orderCount = this._orderCount
+      this._orderedSlotCount = n
+      this._orderDirtyAll = false
+      this._orderDirtyLo = 0x7fffffff
+      this._orderDirtyHi = -1
+      return order
+    }
+    const last = Math.min(hi, n - 1)
+    const first = dirtyAll ? 0 : lo
+    // Compare snapshots only for touched slots. Geometry-only touches leave the order alone.
+    for (let i = first; i <= last; i++) {
+      if (this._orderKey[i] !== K[i] || this._orderKey2[i] !== (K2 ? K2[i] : 0)) keysChanged = true
+      if (this._orderFlags[i] !== (flags[i] & SPRITE_HIDDEN)) membershipChanged = true
+      this._orderKey[i] = K[i]
+      this._orderKey2[i] = K2 ? K2[i] : 0
+      this._orderFlags[i] = flags[i] & SPRITE_HIDDEN
+    }
+    if (n !== this._orderedSlotCount) membershipChanged = true
+    if (membershipChanged || dirtyAll) {
+      let m = 0
+      for (let p = 0; p < this._orderCount; p++) {
+        const slot = order[p]
+        if (slot < n && (flags[slot] & SPRITE_HIDDEN) === 0) order[m++] = slot
+        else inOrder[slot] = 0
+      }
+      this._orderCount = m
+      const scanLo = dirtyAll || n !== this._orderedSlotCount ? 0 : first
+      const scanHi = dirtyAll || n !== this._orderedSlotCount ? n - 1 : last
+      for (let i = scanLo; i <= scanHi; i++) {
+        if (!inOrder[i] && (flags[i] & SPRITE_HIDDEN) === 0) {
+          order[this._orderCount++] = i
+          inOrder[i] = 1
         }
       }
-      order[j + 1] = v
     }
+    let moved = false
+    if (keysChanged || membershipChanged || dirtyAll) {
+      let budget = 8 * this._orderCount + 256
+      for (let i = 1; i < this._orderCount; i++) {
+        const slot = order[i]
+        let j = i - 1
+        while (j >= 0) {
+          const other = order[j]
+          if (K[other] < K[slot] || (K[other] === K[slot] && !this.after(other, slot, K2))) break
+          order[j + 1] = other
+          j--
+          if (--budget < 0) {
+            order[j + 1] = slot
+            this.fullSort(order, this._orderCount, K, K2)
+            j = -2
+            moved = true
+            break
+          }
+        }
+        if (j >= -1) {
+          order[j + 1] = slot
+          if (j + 1 !== i) moved = true
+        }
+      }
+    }
+    this.orderChanged = moved || membershipChanged
+    this.orderCount = this._orderCount
+    this._orderedSlotCount = n
+    this._orderDirtyAll = false
+    this._orderDirtyLo = 0x7fffffff
+    this._orderDirtyHi = -1
     return order
   }
 

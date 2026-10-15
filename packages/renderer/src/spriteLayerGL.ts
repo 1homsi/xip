@@ -464,10 +464,11 @@ export class SpriteLayerRenderer {
         this.gatherBlind(layer, R, na, usePivots, perSprite, swayAmp)
         R.uploadAll = true
       } else {
+        if (layer.sortByKey) layer.drawOrder()
         const incremental =
           !dirtyAll &&
           sameView &&
-          !layer.sortByKey &&
+          (!layer.sortByKey || !layer.orderChanged) &&
           R.count === count &&
           R.segCount >= 0 &&
           dHi >= 0 &&

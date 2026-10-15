@@ -98,6 +98,24 @@ describe('retained SpriteLayer instances', () => {
     expect(r.draws[41 * F]).toBe(78)
   })
 
+  it('incrementally repacks a touched slot in sorted draw order when its key is unchanged', () => {
+    const { rs, run } = setup()
+    const l = make({ sortByKey: true })
+    for (let i = 0; i < 100; i++) {
+      const slot = l.add(i, 5, 8, 8)
+      l.sortKey[slot] = 99 - i
+    }
+    rs.addSpriteLayer(l)
+    run()
+    l.x[40] = 77
+    l.touchRange(40)
+    const r = run()
+    const order = Array.from(l.drawOrder().subarray(0, l.orderCount))
+    const packedPosition = order.indexOf(40)
+    expect(r.uploads).toEqual([{ off: packedPosition * F * 4, floats: F }])
+    expect(r.draws[packedPosition * F]).toBe(77)
+  })
+
   it('touch() verifies every sprite and uploads only the ones that differ', () => {
     const { rs, run } = setup()
     const l = make()

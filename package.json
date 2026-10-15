@@ -10,6 +10,7 @@
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "prepare": "git config core.hooksPath .githooks",
     "bench": "node benchmarks/run.mjs",
+    "bench:sort": "node benchmarks/run-sort.mjs",
     "bench:ci": "node benchmarks/run.mjs --ci",
     "gpu:smoke": "node scripts/gpu-smoke/run.mjs",
     "pack:smoke": "pnpm build && node scripts/publish-packages.mjs smoke",
