@@ -175,7 +175,7 @@ export class GameLoop {
     if (this.mode === 'onDemand') this.dirtyScheduled = false
 
     // Cap delta at 100ms to prevent spiral of death after tab switch or long sleeps.
-    const rawDt = Math.min((time - this.lastTime) / 1000, 0.1)
+    const rawDt = Math.max(0, Math.min((time - this.lastTime) / 1000, 0.1))
     this.lastTime = time
     const dt = this.fixedDt ?? rawDt
 
