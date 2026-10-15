@@ -2756,6 +2756,10 @@ export class RenderSystem implements System {
       const cam = world.getComponent<Camera2DComponent>(camId, 'Camera2D')!
       background = cam.background
 
+      // A NaN/Infinity camera (set by hand, or poisoned earlier) would stay NaN for good: reset it.
+      if (!Number.isFinite(cam.x)) cam.x = 0
+      if (!Number.isFinite(cam.y)) cam.y = 0
+      if (!(cam.zoom > 0) || !Number.isFinite(cam.zoom)) cam.zoom = 1
       let hasTarget = false
       let tx = 0
       let ty = 0
@@ -2778,6 +2782,10 @@ export class RenderSystem implements System {
       if (hasTarget) {
         tx += cam.followOffsetX ?? 0
         ty += cam.followOffsetY ?? 0
+        // A non-finite target (blown-up transform, bad offset) holds the camera instead of poisoning it.
+        if (!Number.isFinite(tx) || !Number.isFinite(ty)) hasTarget = false
+      }
+      if (hasTarget) {
         if (cam.deadZone) {
           const halfW = cam.deadZone.w / 2
           const halfH = cam.deadZone.h / 2
