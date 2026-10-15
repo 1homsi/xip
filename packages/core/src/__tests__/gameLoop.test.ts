@@ -145,6 +145,15 @@ describe('GameLoop', () => {
   })
 
   describe('onTick', () => {
+    it('clamps a negative first-frame delta to zero', () => {
+      _now = 20
+      loop.start()
+      fireFrame(16)
+
+      expect(ticks).toEqual([0])
+      loop.stop()
+    })
+
     it('keeps the realtime loop scheduled when onTick throws', () => {
       let attempts = 0
       const failingLoop = new GameLoop(() => {
