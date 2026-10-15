@@ -42,6 +42,8 @@ export class GameLoop {
   private visibilityHooked = false
   private readonly mode: GameLoopMode
   private dirtyScheduled = false
+  // Retain fractional progress across pauses so resumed fixed-step time stays continuous.
+  private fixedTimeAccumulator = 0
 
   constructor(
     private readonly onTick: (dt: number) => void,
@@ -82,6 +84,7 @@ export class GameLoop {
     this.hookVisibility()
     this.paused = false
     this.lastTime = performance.now()
+    this.fixedTimeAccumulator = 0
     if (this.mode === 'realtime') {
       this.rafId = requestAnimationFrame(this.frame)
     } else {
@@ -177,8 +180,6 @@ export class GameLoop {
     // Cap delta at 100ms to prevent spiral of death after tab switch or long sleeps.
     const rawDt = Math.max(0, Math.min((time - this.lastTime) / 1000, 0.1))
     this.lastTime = time
-    const dt = this.fixedDt ?? rawDt
-
     // Keep realtime ticking even if user/system code throws from onRender or onTick.
     if (this.mode === 'realtime') {
       this.rafId = requestAnimationFrame(this.frame)
@@ -197,7 +198,26 @@ export class GameLoop {
       return
     }
 
-    this.onTick(dt)
+    if (this.mode === 'realtime' && this.fixedDt !== undefined && this.fixedDt > 0 && Number.isFinite(this.fixedDt)) {
+      this.fixedTimeAccumulator += rawDt
+      let steps = 0
+      // Avoid deferring an exact step because of sub-nanosecond float rounding.
+      const fixedStepEpsilon = 1e-9
+      while (this.running && this.fixedTimeAccumulator + fixedStepEpsilon >= this.fixedDt && steps < 5) {
+        this.fixedTimeAccumulator = Math.max(0, this.fixedTimeAccumulator - this.fixedDt)
+        steps++
+        this.onTick(this.fixedDt)
+      }
+      // Drop excess whole steps after the cap while retaining the fractional remainder.
+      if (steps === 5) {
+        this.fixedTimeAccumulator %= this.fixedDt
+        if (this.fixedDt - this.fixedTimeAccumulator <= fixedStepEpsilon) {
+          this.fixedTimeAccumulator = 0
+        }
+      }
+    } else {
+      this.onTick(this.fixedDt ?? rawDt)
+    }
     // onDemand: if markDirty() was called during onTick, dirtyScheduled is now true and
     // rafId has already been set. Otherwise we sleep until the next external markDirty().
   }
