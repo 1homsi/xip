@@ -1672,7 +1672,10 @@ export class RenderSystem implements System {
     this.parallaxTextures.clear()
     this._layerImageTextures = new WeakMap()
     this._layerImageEntries.clear()
-    this._ppBloomExtractProg = null
+    // Post-process objects died with the context; they are rebuilt on the next post-process frame.
+    this._ppBloomExtractProg = this._ppBlurProg = this._ppCompositeProg = null
+    this._ppSceneFBO = this._ppBloomExtractFBO = this._ppBlurFBO1 = this._ppBlurFBO2 = null
+    this._ppSceneTex = this._ppBloomExtractTex = this._ppBlurTex1 = this._ppBlurTex2 = null
     this._ppFBOW = this._ppFBOH = 0
     this._stackTex = null
     this._stackTexW = this._stackTexH = 0
