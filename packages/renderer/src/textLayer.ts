@@ -106,6 +106,8 @@ export class TextLayer {
   count = 0
   capacity = 0
   version = 0
+  /** Called on every mutation (`add`, `setText`, `touch()` ...); `useTextLayer` wires it to wake an `onDemand` loop. */
+  onChange: (() => void) | null = null
   x!: Float32Array
   y!: Float32Array
   /** Font size in world px. */
@@ -176,7 +178,7 @@ export class TextLayer {
     v >>>= 0
     if (v === this._tintColor) return
     this._tintColor = v
-    this.version++
+    this.changed()
   }
   get blend(): LayerBlendMode {
     return this._blend
@@ -184,7 +186,7 @@ export class TextLayer {
   set blend(v: LayerBlendMode) {
     if (v === this._blend) return
     this._blend = v
-    this.version++
+    this.changed()
   }
 
   private grow(capacity: number): void {
@@ -275,20 +277,20 @@ export class TextLayer {
     this.sortKey[i] = 0
     this.ids[i] = o.id ?? i
     this._structure++
-    this.version++
+    this.changed()
     return i
   }
 
   setText(i: number, text: string): void {
     if (this.texts[i] === text) return
     this.texts[i] = text
-    this.version++
+    this.changed()
   }
 
   set(i: number, x: number, y: number): void {
     this.x[i] = x
     this.y[i] = y
-    this.version++
+    this.changed()
   }
 
   /** Swap-remove: the last run moves into slot `i`. */
@@ -319,7 +321,7 @@ export class TextLayer {
     this.texts.length = last
     this._layouts.length = last
     this._structure++
-    this.version++
+    this.changed()
   }
 
   clear(): void {
@@ -327,12 +329,17 @@ export class TextLayer {
     this.texts.length = 0
     this._layouts.length = 0
     this._structure++
-    this.version++
+    this.changed()
   }
 
-  /** Call after writing the arrays directly so idle-frame skipping redraws. */
+  /** Call after writing the arrays directly so idle-frame skipping redraws (and an `onDemand` loop wakes). */
   touch(): void {
+    this.changed()
+  }
+
+  private changed(): void {
     this.version++
+    this.onChange?.()
   }
 
   /**
