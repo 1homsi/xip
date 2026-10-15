@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { StrictMode, useContext } from 'react'
-import { render, act, cleanup } from '@testing-library/react'
+import { render, act, cleanup, waitFor } from '@testing-library/react'
 
 // The WebGL system is controllable: `mode` decides whether its constructor works.
 vi.mock('@xip/renderer', async (orig) => {
@@ -78,13 +78,19 @@ function Probe() {
 
 async function mount(ui: React.ReactElement) {
   let r!: ReturnType<typeof render>
+  engineRef = null
   await act(async () => {
     r = render(ui)
   })
-  // the lazy Canvas2D renderer arrives on a later tick
-  await act(async () => {
-    await new Promise((res) => setTimeout(res, 20))
-  })
+  // The lazy Canvas2D renderer arrives on a later tick, and a loaded machine makes that arbitrarily late:
+  // wait until an engine is running (or the error panel is up) instead of sleeping a fixed time.
+  await waitFor(
+    () => {
+      const ready = engineRef?.activeRenderSystem || r.container.textContent?.includes('Rendering Not Available')
+      expect(ready).toBeTruthy()
+    },
+    { timeout: 5000 },
+  )
   return r
 }
 
