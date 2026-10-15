@@ -95,6 +95,7 @@ export function Camera2D({
     const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
     cam.x = x
     cam.y = y
+    engine.loop.markDirty()
   }, [x, y, engine])
 
   // Object props (bounds, deadZone) are compared by value: inline JSX creates a new object on
@@ -118,6 +119,7 @@ export function Camera2D({
     cam.followOffsetX = followOffsetX
     cam.followOffsetY = followOffsetY
     cam.pixelSnap = pixelSnap
+    engine.loop.markDirty()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     followEntity,
@@ -148,6 +150,7 @@ export function Camera2D({
     cam.followPoint = followPoint
     cam.followSprite = spriteLayer ? { layer: spriteLayer, index: spriteIndex, id: spriteId } : undefined
     cam._followSpriteIndex = undefined
+    engine.loop.markDirty()
   }, [followPoint, spriteLayer, spriteIndex, spriteId, engine])
 
   return null

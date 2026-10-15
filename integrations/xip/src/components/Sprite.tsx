@@ -151,6 +151,7 @@ export function Sprite({
       starInnerRadius,
     })
     engine.ecs.addComponent(entityId, comp)
+    engine.loop.markDirty()
 
     if (src) {
       // loadImage auto-resolves the base URL; store the resolved src on the
@@ -162,6 +163,7 @@ export function Sprite({
           if (c) {
             c.image = img
             c.src = img.src // use the fully resolved URL for WebGL cache matching
+            engine.loop.markDirty()
           }
         })
         .catch((err: unknown) => {
@@ -192,6 +194,7 @@ export function Sprite({
     if (!src) {
       comp.image = undefined
       comp.src = undefined
+      engine.loop.markDirty()
       return
     }
     let cancelled = false
@@ -203,6 +206,7 @@ export function Sprite({
         if (c) {
           c.image = img
           c.src = img.src
+          engine.loop.markDirty()
         }
       })
       .catch((err: unknown) => {
@@ -254,6 +258,8 @@ export function Sprite({
     comp.customDraw = customDraw
     comp.starPoints = starPoints
     comp.starInnerRadius = starInnerRadius
+    // An onDemand loop only repaints when woken; a prop change driven from outside the canvas must wake it.
+    engine.loop.markDirty()
   }, [
     width,
     height,
