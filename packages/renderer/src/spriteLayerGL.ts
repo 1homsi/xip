@@ -59,7 +59,8 @@ interface Retained {
   endsAdditive: boolean
 }
 
-const VERT = `#version 300 es
+/** @internal exported for tests */
+export const SPRITE_LAYER_VERT = `#version 300 es
 layout(location = 0) in vec2 a_quadPos;
 layout(location = 1) in vec2 a_uv;
 layout(location = 2) in vec2  i_pos;
@@ -126,7 +127,8 @@ void main() {
   v_rect = i_uvRect;
   v_color = i_color;
   v_atlas = i_atlas < -0.5 ? -1 : int(i_atlas + 0.5);
-  float ap = i_add + 0.5;
+  // i_add is an exact integer < 2^24; adding 0.5 would tie-round in float32 above 2^23.
+  float ap = i_add;
   v_add = vec3(floor(ap / 65536.0), mod(floor(ap / 256.0), 256.0), mod(floor(ap), 256.0)) / 255.0;
 }
 `
@@ -231,7 +233,7 @@ export class SpriteLayerRenderer {
   private init(): void {
     const { gl } = this
     const p = gl.createProgram()!
-    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, VERT))
+    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, SPRITE_LAYER_VERT))
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FRAG))
     gl.linkProgram(p)
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`[SpriteLayer] ${gl.getProgramInfoLog(p)}`)
