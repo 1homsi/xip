@@ -258,8 +258,8 @@ export class SpriteLayer {
   private _orderDirtyLo = 0x7fffffff
   private _orderDirtyHi = -1
   private _orderedSlotCount = 0
-  /** True when the most recent drawOrder call changed sorted membership or positions. */
-  orderChanged = true
+  /** Bumped whenever {@link drawOrder} changes which sprites are in the order or where (renderers compare it between frames). */
+  orderVersion = 0
   /** Sprites in the last {@link drawOrder} (visible ones only when `sortByKey`). */
   orderCount = 0
 
@@ -599,17 +599,16 @@ export class SpriteLayer {
     }
     const order = this._order
     if (!this.sortByKey) {
-      this.orderChanged = false
       for (let i = 0; i < n; i++) order[i] = i
       this.orderCount = n
       if (this._orderCount !== 0) {
         this._inOrder.fill(0)
         this._orderCount = 0
       }
+      this._orderDirtyAll = true // the snapshots below go stale while unsorted
       return order
     }
     if (!this._orderDirtyAll && this._orderDirtyHi < this._orderDirtyLo) {
-      this.orderChanged = false
       this.orderCount = this._orderCount
       this._orderedSlotCount = n
       return order
@@ -634,7 +633,7 @@ export class SpriteLayer {
         this._orderFlags[i] = flags[i] & SPRITE_HIDDEN
       }
       this.fullSort(order, this._orderCount, K, K2)
-      this.orderChanged = true
+      this.orderVersion++
       this.orderCount = this._orderCount
       this._orderedSlotCount = n
       this._orderDirtyAll = false
@@ -695,7 +694,7 @@ export class SpriteLayer {
         }
       }
     }
-    this.orderChanged = moved || membershipChanged
+    if (moved || membershipChanged) this.orderVersion++
     this.orderCount = this._orderCount
     this._orderedSlotCount = n
     this._orderDirtyAll = false

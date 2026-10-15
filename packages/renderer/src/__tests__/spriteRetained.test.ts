@@ -116,6 +116,24 @@ describe('retained SpriteLayer instances', () => {
     expect(r.draws[packedPosition * F]).toBe(77)
   })
 
+  it('repacks a sorted layer whose order changed even when pick() already consumed the new order', () => {
+    const { rs, run } = setup()
+    const l = make({ sortByKey: true })
+    for (let i = 0; i < 100; i++) {
+      const slot = l.add(i, 5, 8, 8)
+      l.sortKey[slot] = i
+    }
+    rs.addSpriteLayer(l)
+    run()
+    l.x[10] = 77
+    l.sortKey[10] = 1000 // now drawn last
+    l.touchRange(10)
+    l.pick(0, 0) // sorts the layer before the renderer sees it
+    const r = run()
+    expect(r.draws[99 * F]).toBe(77)
+    expect(r.draws[10 * F]).toBe(11)
+  })
+
   it('finds the touched slot draw segment efficiently across interleaved atlases', () => {
     const { rs, run } = setup()
     const atlas = () => ({ image: img(64), frameWidth: 16, frameHeight: 16 })

@@ -55,6 +55,8 @@ interface Retained {
   vT: number
   vB: number
   count: number
+  /** `SpriteLayer.orderVersion` the packed instances were gathered under. */
+  orderVersion: number
   n: number
   endsAdditive: boolean
 }
@@ -464,11 +466,17 @@ export class SpriteLayerRenderer {
         this.gatherBlind(layer, R, na, usePivots, perSprite, swayAmp)
         R.uploadAll = true
       } else {
-        if (layer.sortByKey) layer.drawOrder()
+        let orderKept = true
+        if (layer.sortByKey) {
+          layer.drawOrder()
+          // other callers (pick) may have consumed the change already: compare against what was packed
+          orderKept = R.orderVersion === layer.orderVersion
+          R.orderVersion = layer.orderVersion
+        }
         const incremental =
           !dirtyAll &&
           sameView &&
-          (!layer.sortByKey || !layer.orderChanged) &&
+          orderKept &&
           R.count === count &&
           R.segCount >= 0 &&
           dHi >= 0 &&
@@ -527,6 +535,7 @@ export class SpriteLayerRenderer {
         vT: NaN,
         vB: NaN,
         count: -1,
+        orderVersion: -1,
         n: 0,
         endsAdditive: false,
       }
