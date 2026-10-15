@@ -135,4 +135,39 @@ describe('Keyboard', () => {
       expect(keyboard.isDown('KeyA')).toBe(false)
     })
   })
+
+  describe('e.key aliases while modifiers change during a hold', () => {
+    it('releases the alias that was pressed when Shift went down mid-hold', () => {
+      fireKeyDown(target, 'KeyA', 'a')
+      keyboard.flush()
+      fireKeyDown(target, 'ShiftLeft', 'Shift')
+      fireKeyDown(target, 'KeyA', 'A') // auto-repeat with Shift: must not add a phantom 'A'
+      expect(keyboard.isPressed('A')).toBe(false)
+      expect(keyboard.isDown('A')).toBe(false)
+      fireKeyUp(target, 'KeyA', 'A') // released while Shift is still down
+      expect(keyboard.isDown('a')).toBe(false)
+      expect(keyboard.isDown('KeyA')).toBe(false)
+      expect(keyboard.isReleased('a')).toBe(true)
+    })
+
+    it('releases the alias when Shift is let go before the key', () => {
+      fireKeyDown(target, 'ShiftLeft', 'Shift')
+      fireKeyDown(target, 'KeyA', 'A')
+      fireKeyUp(target, 'ShiftLeft', 'Shift')
+      fireKeyUp(target, 'KeyA', 'a')
+      expect(keyboard.isDown('A')).toBe(false)
+      expect(keyboard.isDown('a')).toBe(false)
+      expect(keyboard.isReleased('A')).toBe(true)
+    })
+
+    it('forgets the recorded alias on release so the next press uses the new key', () => {
+      fireKeyDown(target, 'KeyA', 'a')
+      fireKeyUp(target, 'KeyA', 'a')
+      keyboard.flush()
+      fireKeyDown(target, 'KeyA', 'A')
+      expect(keyboard.isDown('A')).toBe(true)
+      expect(keyboard.isPressed('A')).toBe(true)
+      expect(keyboard.isDown('a')).toBe(false)
+    })
+  })
 })
