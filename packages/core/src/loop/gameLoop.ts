@@ -179,14 +179,17 @@ export class GameLoop {
     this.lastTime = time
     const dt = this.fixedDt ?? rawDt
 
+    // Keep realtime ticking even if user/system code throws from onRender or onTick.
+    if (this.mode === 'realtime') {
+      this.rafId = requestAnimationFrame(this.frame)
+    }
+
     if (this.hitPauseTimer > 0) {
       // Use real wall-clock time so freeze duration is accurate in fixed-dt mode
       this.hitPauseTimer -= rawDt
       // Still render the frozen frame so the screen isn't blank
       this.onRender?.(0)
-      if (this.mode === 'realtime') {
-        this.rafId = requestAnimationFrame(this.frame)
-      } else if (this.hitPauseTimer > 0) {
+      if (this.mode === 'onDemand' && this.hitPauseTimer > 0) {
         // Keep the onDemand loop awake for the rest of the freeze
         this.dirtyScheduled = true
         this.rafId = requestAnimationFrame(this.frame)
@@ -195,10 +198,6 @@ export class GameLoop {
     }
 
     this.onTick(dt)
-
-    if (this.mode === 'realtime') {
-      this.rafId = requestAnimationFrame(this.frame)
-    }
     // onDemand: if markDirty() was called during onTick, dirtyScheduled is now true and
     // rafId has already been set. Otherwise we sleep until the next external markDirty().
   }
