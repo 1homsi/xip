@@ -330,6 +330,8 @@ const NO_TILE_LAYERS: readonly TileLayerData[] = []
 const MAX_SPRITE_TEXTURES = 1024
 /** Maximum text texture cache entries before evicting oldest. */
 const MAX_TEXT_CACHE = 4096
+/** A failed image load is not re-requested for this long (ms), so a 404 does not cost a request per frame. */
+const IMAGE_RETRY_MS = 5000
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
@@ -872,6 +874,8 @@ export class RenderSystem implements System {
   private readonly textureLRU = new Map<string, number>()
   private _frame = 0
   private readonly imageCache = new Map<string, HTMLImageElement>()
+  /** image URL -> performance.now() of its last failed load; not re-requested until IMAGE_RETRY_MS has passed. */
+  private readonly failedImages = new Map<string, number>()
 
   // Cached uniform locations — sprite program
   private uCamPos!: WebGLUniformLocation
@@ -1733,6 +1737,7 @@ export class RenderSystem implements System {
     this.parallaxTextures.clear()
     this.textureCache.clear()
     this._dynamicCanvases.clear()
+    this.failedImages.clear()
   }
 
   private initGL(): void {
@@ -1865,6 +1870,14 @@ export class RenderSystem implements System {
 
   // ── Texture management (sprite textures — CLAMP_TO_EDGE) ──────────────────
 
+  private imageRecentlyFailed(imgSrc: string): boolean {
+    const at = this.failedImages.get(imgSrc)
+    if (at === undefined) return false
+    if (performance.now() - at < IMAGE_RETRY_MS) return true
+    this.failedImages.delete(imgSrc)
+    return false
+  }
+
   private loadTexture(src: string): WebGLTexture {
     const cached = this.textures.get(src)
     if (cached) {
@@ -1879,6 +1892,9 @@ export class RenderSystem implements System {
     const sampIdx = imgSrc.indexOf(':s=')
     if (sampIdx !== -1) imgSrc = imgSrc.slice(0, sampIdx)
     if (imgSrc.endsWith(':repeat')) imgSrc = imgSrc.slice(0, -7)
+
+    // A load that failed recently draws white and is not re-requested until the retry window passes.
+    if (this.imageRecentlyFailed(imgSrc)) return this.whiteTexture
 
     // Check if this src is already loaded in imageCache (e.g. from fallback path)
     const existing = this.imageCache.get(imgSrc)
@@ -1921,6 +1937,7 @@ export class RenderSystem implements System {
       img.onerror = () => {
         console.warn(`[WebGLRenderSystem] Failed to load image: ${imgSrc}`)
         this.imageCache.delete(imgSrc)
+        this.failedImages.set(imgSrc, performance.now())
       }
       this.imageCache.set(imgSrc, img)
     }
@@ -2278,8 +2295,9 @@ export class RenderSystem implements System {
         this.touchTexture(el.src)
       }
       el.onerror = () => {
-        console.warn(`[WebGLRenderSystem] Failed to load image: ${el.src}`)
-        this.imageCache.delete(el.src)
+        console.warn(`[WebGLRenderSystem] Failed to load image: ${src}`)
+        this.imageCache.delete(src)
+        this.failedImages.set(src, performance.now())
       }
     }
     sprite.image = img
