@@ -144,6 +144,8 @@ flat in vec4 v_rect;
 flat in vec2 v_shift;
 uniform sampler2D u_tex[${ATLASES_PER_DRAW}];
 uniform vec4 u_layerTint;
+// 1 for the 'multiply' layer blend: premultiply so DST_COLOR x ONE_MINUS_SRC_ALPHA is dst * (1 - a + a * rgb).
+uniform float u_premul;
 out vec4 fragColor;
 void main() {
   vec4 t = vec4(1.0);
@@ -158,6 +160,7 @@ ${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture
   }
   fragColor = t * v_color * u_layerTint;
   fragColor.rgb += v_add * fragColor.a;
+  fragColor.rgb *= mix(1.0, fragColor.a, u_premul);
 }
 `
 
@@ -206,6 +209,7 @@ export class SpriteLayerRenderer {
   private uWind: WebGLUniformLocation | null = null
   private uWindShape: WebGLUniformLocation | null = null
   private uTint: WebGLUniformLocation | null = null
+  private uPremul: WebGLUniformLocation | null = null
   private readonly tintScratch = new Float32Array(4)
   private readonly retained = new Map<SpriteLayer, Retained>()
   // Per-atlas state for the layer being drawn (rebuilt every draw).
@@ -246,6 +250,7 @@ export class SpriteLayerRenderer {
     this.uWind = gl.getUniformLocation(p, 'u_wind')
     this.uWindShape = gl.getUniformLocation(p, 'u_windShape')
     this.uTint = gl.getUniformLocation(p, 'u_layerTint')
+    this.uPremul = gl.getUniformLocation(p, 'u_premul')
     gl.useProgram(p)
     for (let i = 0; i < ATLASES_PER_DRAW; i++) gl.uniform1i(gl.getUniformLocation(p, `u_tex[${i}]`), i)
 
@@ -345,6 +350,7 @@ export class SpriteLayerRenderer {
     unpackRGBA(layer.tintColor, tc)
     gl.uniform4f(this.uTint, tc[0], tc[1], tc[2], tc[3] * layer.opacity)
     if (layer.blend !== 'normal') setBlendFunc(gl, layer.blend)
+    gl.uniform1f(this.uPremul, layer.blend === 'multiply' ? 1 : 0)
 
     const atlases = layer.atlases
     const na = Math.min(atlases.length, MAX_LAYER_ATLASES)
@@ -1091,6 +1097,7 @@ export class SpriteLayerRenderer {
       }
       if (add !== curAdd) {
         setBlendFunc(gl, add ? 'additive' : layer.blend)
+        gl.uniform1f(this.uPremul, !add && layer.blend === 'multiply' ? 1 : 0)
         curAdd = add
       }
       if (start !== lastStart) {

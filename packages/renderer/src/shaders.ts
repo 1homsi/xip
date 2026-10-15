@@ -75,6 +75,9 @@ in vec4 v_color;
 
 uniform sampler2D u_texture;
 uniform int       u_useTexture;
+// 1 while drawing with the 'multiply' blend: colour is premultiplied by alpha so
+// DST_COLOR x ONE_MINUS_SRC_ALPHA gives dst * (1 - a + a * rgb).
+uniform float     u_premul;
 
 out vec4 fragColor;
 
@@ -84,6 +87,7 @@ void main() {
   } else {
     fragColor = v_color;
   }
+  fragColor.rgb *= mix(1.0, fragColor.a, u_premul);
 }
 `
 

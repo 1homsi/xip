@@ -28,6 +28,8 @@ export interface RecordedDraw {
   instances: Float32Array | null
   /** `[src, dst]` factors of the blend function active for this draw. */
   blend: [number, number]
+  /** Value of the `u_premul` float uniform when the draw was issued (0 if never set). */
+  premul: number
 }
 
 export interface RecordedInstance {
@@ -184,6 +186,7 @@ export class RecordingGL {
 
   private boundTexture: RecordedTexture | null = null
   private blendFactors: [number, number] = [0x0302, 0x0303]
+  private premul = 0
   private lastInstanceSrc: ArrayBufferView | null = null
 
   constructor(
@@ -292,12 +295,20 @@ export class RecordingGL {
       texture: this.boundTexture,
       instances,
       blend: this.blendFactors,
+      premul: this.premul,
     })
     this.totalDraws++
     this.totalInstances += instanceCount
   }
   drawArrays(_mode: number, _first: number, count: number): void {
-    this.draws.push({ kind: 'arrays', count, texture: this.boundTexture, instances: null, blend: this.blendFactors })
+    this.draws.push({
+      kind: 'arrays',
+      count,
+      texture: this.boundTexture,
+      instances: null,
+      blend: this.blendFactors,
+      premul: this.premul,
+    })
     this.totalDraws++
   }
 
@@ -323,8 +334,11 @@ export class RecordingGL {
   createShader(): object {
     return { id: nextObjId++ }
   }
-  getUniformLocation(): object {
-    return { id: nextObjId++ }
+  getUniformLocation(_program?: unknown, name?: string): object {
+    return { id: nextObjId++, name }
+  }
+  uniform1f(loc: { name?: string } | null, v: number): void {
+    if (loc?.name === 'u_premul') this.premul = v
   }
   getShaderParameter(): boolean {
     return true
@@ -379,7 +393,6 @@ for (const name of [
   'linkProgram',
   'shaderSource',
   'texParameteri',
-  'uniform1f',
   'uniform1i',
   'uniform2f',
   'useProgram',

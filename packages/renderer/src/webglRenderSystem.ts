@@ -880,6 +880,9 @@ export class RenderSystem implements System {
   private uShake!: WebGLUniformLocation
   private uTexture!: WebGLUniformLocation
   private uUseTexture!: WebGLUniformLocation
+  private uPremul!: WebGLUniformLocation | null
+  /** The blend applyBlendMode last set is 'multiply' (sprite shader must premultiply colour). */
+  private mulBlend = false
 
   // ── Parallax program ──────────────────────────────────────────────────────
   private parallaxProgram!: WebGLProgram
@@ -1792,6 +1795,7 @@ export class RenderSystem implements System {
     this.uShake = gl.getUniformLocation(this.program, 'u_shake')!
     this.uTexture = gl.getUniformLocation(this.program, 'u_texture')!
     this.uUseTexture = gl.getUniformLocation(this.program, 'u_useTexture')!
+    this.uPremul = gl.getUniformLocation(this.program, 'u_premul')
 
     this.whiteTexture = createWhiteTexture(gl)
     this.particleTextureSoft = this._createParticleTexture('soft')
@@ -2095,6 +2099,7 @@ export class RenderSystem implements System {
 
   private applyBlendMode(mode: string): void {
     const { gl } = this
+    this.mulBlend = mode === 'multiply'
     switch (mode) {
       case 'additive':
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
@@ -2189,6 +2194,7 @@ export class RenderSystem implements System {
     this.applySampling(tex, sampling)
     // Shape textures need useTexture=1 so the alpha mask is applied via texture * color
     gl.uniform1i(this.uUseTexture, isColor ? 0 : 1)
+    gl.uniform1f(this.uPremul, this.mulBlend ? 1 : 0)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
@@ -2204,6 +2210,7 @@ export class RenderSystem implements System {
     const { gl } = this
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.uniform1i(this.uUseTexture, useTexture ? 1 : 0)
+    gl.uniform1f(this.uPremul, this.mulBlend ? 1 : 0)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
