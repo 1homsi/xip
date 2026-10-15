@@ -1,7 +1,11 @@
 export type GameLoopMode = 'realtime' | 'onDemand'
 
 export interface GameLoopOptions {
-  /** When set, every tick receives this fixed dt instead of the real elapsed time. */
+  /**
+   * When set, every tick receives this fixed dt instead of the real elapsed time. In realtime
+   * mode real time is accumulated and ticked in fixedDt steps (at most 5 per frame), so the
+   * simulation speed does not depend on the display refresh rate. onDemand ticks once per frame.
+   */
   fixedDt?: number
   /** Called every frame even during hit-pause, so the last frame stays rendered. */
   onRender?: (dt: number) => void
@@ -201,8 +205,9 @@ export class GameLoop {
     if (this.mode === 'realtime' && this.fixedDt !== undefined && this.fixedDt > 0 && Number.isFinite(this.fixedDt)) {
       this.fixedTimeAccumulator += rawDt
       let steps = 0
-      // Avoid deferring an exact step because of sub-nanosecond float rounding.
-      const fixedStepEpsilon = 1e-9
+      // rAF timestamps jitter by a fraction of a millisecond, so a nominal-60 Hz display that
+      // reports 16.6 ms must still tick once per frame instead of skipping and then doubling.
+      const fixedStepEpsilon = 0.0005
       while (this.running && this.fixedTimeAccumulator + fixedStepEpsilon >= this.fixedDt && steps < 5) {
         this.fixedTimeAccumulator = Math.max(0, this.fixedTimeAccumulator - this.fixedDt)
         steps++

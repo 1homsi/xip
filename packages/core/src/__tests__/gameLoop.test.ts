@@ -157,6 +157,19 @@ describe('GameLoop', () => {
       fixedLoop.stop()
     })
 
+    it('ticks once per frame on a display slightly faster than the fixed rate', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      for (let frame = 1; frame <= 120; frame++) {
+        fireFrame(frame * 16.4)
+      }
+
+      expect(fixedTicks).toHaveLength(120)
+      fixedLoop.stop()
+    })
+
     it('caps realtime fixed-step catch-up at five ticks per frame', () => {
       const fixedTicks: number[] = []
       const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
