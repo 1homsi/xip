@@ -59,6 +59,28 @@ describe('useCameraPanZoom', () => {
     expect(onTap).toHaveBeenCalledWith(expect.objectContaining({ worldX: 50 + 102, worldY: 1 }))
   })
 
+  it('a cancelled pointer is not a tap and does not fling', () => {
+    const onTap = vi.fn()
+    const { cam, ptr } = setup({ onTap })
+    ptr('pointerdown', 500, 300)
+    ptr('pointercancel', 500, 300)
+    expect(onTap).not.toHaveBeenCalled()
+    // a fresh press-release afterwards is still a tap
+    ptr('pointerdown', 500, 300)
+    ptr('pointerup', 500, 300)
+    expect(onTap).toHaveBeenCalledTimes(1)
+    // a cancelled drag keeps the pan so far but starts no inertia glide
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => 1)
+    ptr('pointerdown', 100, 100)
+    ptr('pointermove', 140, 100)
+    ptr('pointermove', 180, 100)
+    const x = cam.x
+    ptr('pointercancel', 180, 100)
+    expect(cam.x).toBe(x)
+    expect(raf).not.toHaveBeenCalledWith(expect.any(Function))
+    raf.mockRestore()
+  })
+
   it('wheel zooms around the cursor and respects limits', () => {
     const { cam, wheel } = setup({ maxZoom: 3 })
     const worldUnder = (sx: number, sy: number) => [cam.x + (sx - 400) / cam.zoom, cam.y + (sy - 300) / cam.zoom]
