@@ -716,8 +716,14 @@ export class SpriteLayerRenderer {
       }
       // still inside a draw segment with the same texture group and blend?
       const segs = R.segs
-      let q = 0
-      while (q + 4 < segs.length && segs[q + 1] <= n) q += 4
+      let lo = 0
+      let hi = (segs.length >> 2) - 1
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1
+        if (segs[mid * 4 + 1] <= n) lo = mid + 1
+        else hi = mid
+      }
+      const q = lo * 4
       const sg = segs[q + 2]
       const g = R.pos[n * FLOATS + 17] >= 0 ? layer.atlas[i] >> 3 : -1
       if ((g >= 0 && g !== sg) || (segs[q + 3] === 1) !== ((flags & SPRITE_ADDITIVE) !== 0)) return false

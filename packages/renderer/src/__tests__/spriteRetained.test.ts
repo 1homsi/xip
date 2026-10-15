@@ -116,6 +116,24 @@ describe('retained SpriteLayer instances', () => {
     expect(r.draws[packedPosition * F]).toBe(77)
   })
 
+  it('finds the touched slot draw segment efficiently across interleaved atlases', () => {
+    const { rs, run } = setup()
+    const atlas = () => ({ image: img(64), frameWidth: 16, frameHeight: 16 })
+    const l = new SpriteLayer({ atlases: [atlas(), atlas()], sortByKey: true })
+    for (let i = 0; i < 100; i++) {
+      const slot = l.add(i, 5, 8, 8)
+      l.atlas[slot] = i & 1
+      l.sortKey[slot] = i
+    }
+    rs.addSpriteLayer(l)
+    run()
+    l.x[75] = 77
+    l.touchRange(75)
+    const r = run()
+    expect(r.uploads).toEqual([{ off: 75 * F * 4, floats: F }])
+    expect(r.draws[75 * F]).toBe(77)
+  })
+
   it('touch() verifies every sprite and uploads only the ones that differ', () => {
     const { rs, run } = setup()
     const l = make()
