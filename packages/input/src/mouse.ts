@@ -19,10 +19,13 @@ export class Mouse {
   private onMouseMove = (e: MouseEvent): void => {
     if (!this.target) return
     const rect = this.target.getBoundingClientRect()
-    this.dx = e.clientX - rect.left - this.x
-    this.dy = e.clientY - rect.top - this.y
-    this.x = e.clientX - rect.left
-    this.y = e.clientY - rect.top
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    // Several mousemoves arrive per frame: dx/dy are the sum since the last flush(), x/y the latest position.
+    this.dx += x - this.x
+    this.dy += y - this.y
+    this.x = x
+    this.y = y
   }
 
   private onMouseDown = (e: MouseEvent): void => {
