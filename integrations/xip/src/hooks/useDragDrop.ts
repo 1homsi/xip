@@ -13,6 +13,8 @@ import type { SnapControls } from './useSnap'
 
 interface ActiveDrag {
   entityId: EntityId
+  /** The pointer that owns this drag (a cancel of any other pointer is not ours). */
+  pointerId: number
   tag: string | null
   pointerX: number
   pointerY: number
@@ -148,6 +150,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       startWorldY = world.y
       setActiveDrag(engine, {
         entityId: entityId as EntityId,
+        pointerId: e.pointerId,
         tag: optsRef.current?.tag ?? null,
         pointerX: e.clientX,
         pointerY: e.clientY,
@@ -359,8 +362,10 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
       optsRef.current?.onDrop?.({ droppedEntityId: dragId, x: dragX, y: dragY })
     }
     // A cancelled pointer drops nothing: leave the zone without onDrop.
-    const onCancel = () => {
+    const onCancel = (e: PointerEvent) => {
       if (!currentlyOver) return
+      const owner = getActiveDrag(engine)
+      if (owner && owner.pointerId !== e.pointerId) return
       const dragId = hoveredId ?? getActiveDrag(engine)?.entityId ?? null
       currentlyOver = false
       setIsOver(false)

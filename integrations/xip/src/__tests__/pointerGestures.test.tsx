@@ -114,10 +114,25 @@ describe('pointercancel is not a release', () => {
     expect(c.onDragCancel).toHaveBeenCalledWith({ entityId: id, x: 0, y: 0 })
     expect(c.onLeave).toHaveBeenCalledTimes(1)
     expect(t.x).toBe(0)
+    expect(c.onLeave).toHaveBeenCalledTimes(1)
     // the drag is over: a later pointerup of the same pointer does nothing
     act(() => window.dispatchEvent(pe('pointerup', 1, 150, 50)))
     expect(c.onDragEnd).not.toHaveBeenCalled()
     expect(c.onDrop).not.toHaveBeenCalled()
+  })
+
+  it('ignores the cancel of a pointer that does not own the drag', () => {
+    const { engine, id, zone } = world()
+    const c = cbs()
+    mountDrag(engine, id, zone, c)
+    const t = engine.ecs.getComponent<{ type: string; x: number; y: number }>(id, 'Transform')!
+    act(() => window.dispatchEvent(pe('pointermove', 1, 150, 50)))
+    act(() => window.dispatchEvent(pe('pointercancel', 2, 10, 10))) // a palm touch, not the dragging finger
+    expect(c.onDragCancel).not.toHaveBeenCalled()
+    expect(c.onLeave).not.toHaveBeenCalled()
+    expect(t.x).toBe(50)
+    act(() => window.dispatchEvent(pe('pointerup', 1, 150, 50)))
+    expect(c.onDragEnd).toHaveBeenCalledWith(expect.objectContaining({ droppedOn: zone }))
   })
 
   it('a released drag still ends with onDragEnd (guards the cancel split)', () => {

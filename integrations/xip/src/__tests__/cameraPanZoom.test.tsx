@@ -61,7 +61,7 @@ describe('useCameraPanZoom', () => {
 
   it('a cancelled pointer is not a tap and does not fling', () => {
     const onTap = vi.fn()
-    const { cam, ptr } = setup({ onTap })
+    const { ptr } = setup({ onTap })
     ptr('pointerdown', 500, 300)
     ptr('pointercancel', 500, 300)
     expect(onTap).not.toHaveBeenCalled()
@@ -69,16 +69,46 @@ describe('useCameraPanZoom', () => {
     ptr('pointerdown', 500, 300)
     ptr('pointerup', 500, 300)
     expect(onTap).toHaveBeenCalledTimes(1)
-    // a cancelled drag keeps the pan so far but starts no inertia glide
+  })
+
+  it('a cancelled drag keeps the pan so far but starts no inertia glide', () => {
     const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => 1)
-    ptr('pointerdown', 100, 100)
-    ptr('pointermove', 140, 100)
-    ptr('pointermove', 180, 100)
+    try {
+      const { cam, ptr } = setup()
+      ptr('pointerdown', 100, 100)
+      ptr('pointermove', 140, 100)
+      ptr('pointermove', 180, 100)
+      expect(cam.x).toBeCloseTo(-80) // the drag moved the camera
+      ptr('pointercancel', 180, 100)
+      expect(cam.x).toBeCloseTo(-80)
+      expect(raf).not.toHaveBeenCalled()
+      // control: the same drag released normally does glide
+      ptr('pointerdown', 100, 100)
+      ptr('pointermove', 140, 100)
+      ptr('pointermove', 180, 100)
+      ptr('pointerup', 180, 100)
+      expect(raf).toHaveBeenCalled()
+    } finally {
+      raf.mockRestore()
+    }
+  })
+
+  it('cancelling one finger of a pinch hands over to a one-finger pan: no tap, no jump', () => {
+    const onTap = vi.fn()
+    const { cam, ptr } = setup({ onTap, inertia: false })
+    ptr('pointerdown', 300, 300, 1)
+    ptr('pointerdown', 500, 300, 2)
+    ptr('pointermove', 600, 300, 2)
+    ptr('pointercancel', 600, 300, 2)
     const x = cam.x
-    ptr('pointercancel', 180, 100)
-    expect(cam.x).toBe(x)
-    expect(raf).not.toHaveBeenCalledWith(expect.any(Function))
-    raf.mockRestore()
+    const zoom = cam.zoom
+    ptr('pointermove', 310, 300, 1) // the remaining finger pans from where it is
+    expect(cam.zoom).toBe(zoom)
+    expect(cam.x).toBeCloseTo(x - 10)
+    ptr('pointerup', 310, 300, 1)
+    expect(onTap).not.toHaveBeenCalled()
+    ptr('pointercancel', 5, 5, 9) // a pointer we never saw
+    expect(onTap).not.toHaveBeenCalled()
   })
 
   it('wheel zooms around the cursor and respects limits', () => {
