@@ -145,6 +145,21 @@ describe('GameLoop', () => {
   })
 
   describe('onTick', () => {
+    it('keeps the realtime loop scheduled when onTick throws', () => {
+      let attempts = 0
+      const failingLoop = new GameLoop(() => {
+        attempts++
+        throw new Error('tick failed')
+      })
+      failingLoop.start()
+
+      expect(() => fireFrame(16)).toThrow('tick failed')
+      expect(rafCallback).not.toBeNull()
+      expect(() => fireFrame(32)).toThrow('tick failed')
+      expect(attempts).toBe(2)
+      failingLoop.stop()
+    })
+
     it('onTick is called with correct dt when rAF fires', () => {
       _now = 0
       loop.start()
