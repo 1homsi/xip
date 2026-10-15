@@ -85,6 +85,22 @@ describe('a 404 image is not re-requested every frame', () => {
     expect(requests('/missing-sprite.png')).toHaveLength(1)
   })
 
+  it('sprites created after a failure do not re-request the URL', () => {
+    const { world, failingFrames } = setup()
+    const add = () => {
+      const e = world.createEntity()
+      world.addComponent(e, createTransform(0, 0))
+      world.addComponent(e, createSprite({ src: '/missing-bullet.png', width: 8, height: 8 }))
+    }
+    add()
+    failingFrames(2)
+    for (let i = 0; i < 20; i++) {
+      add()
+      failingFrames(1)
+    }
+    expect(requests('/missing-bullet.png')).toHaveLength(1)
+  })
+
   it('warns once per failed load, not per frame', () => {
     const { rs, failingFrames } = setup()
     const layer = new SpriteLayer({ src: '/warn.png', frameWidth: 16, frameHeight: 16 })

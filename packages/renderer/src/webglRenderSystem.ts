@@ -2279,6 +2279,8 @@ export class RenderSystem implements System {
     const src = sprite.src!
     let img = this.imageCache.get(src)
     if (!img) {
+      // Sprites spawned after a failure (bullets, particles) must not each re-request the same 404.
+      if (this.imageRecentlyFailed(src)) return
       const el = new Image()
       img = el
       el.src = src
