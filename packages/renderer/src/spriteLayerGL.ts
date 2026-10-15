@@ -159,8 +159,8 @@ ${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture
     default: break;
   }
   fragColor = t * v_color * u_layerTint;
-  fragColor.rgb *= mix(1.0, fragColor.a, u_premul);
   fragColor.rgb += v_add * fragColor.a;
+  fragColor.rgb *= mix(1.0, fragColor.a, u_premul);
 }
 `
 
