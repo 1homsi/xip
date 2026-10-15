@@ -89,7 +89,7 @@ async function mount(ui: React.ReactElement) {
       const ready = engineRef?.activeRenderSystem || r.container.textContent?.includes('Rendering Not Available')
       expect(ready).toBeTruthy()
     },
-    { timeout: 5000 },
+    { timeout: 3000 },
   )
   return r
 }
@@ -174,6 +174,10 @@ describe('<Game renderer>', () => {
     )
     expect(r.container.textContent).toContain('Rendering Not Available')
     expect(r.container.textContent).toContain('WebGL2 is required')
+    // the panel is up at once, so give a (wrongly) loaded Canvas2D renderer time to show itself before the negatives
+    await act(async () => {
+      await new Promise((res) => setTimeout(res, 50))
+    })
     expect(engineRef).toBeNull()
     expect(requests).not.toContain('2d')
   })
