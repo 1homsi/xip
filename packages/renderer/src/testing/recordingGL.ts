@@ -301,7 +301,14 @@ export class RecordingGL {
     this.totalInstances += instanceCount
   }
   drawArrays(_mode: number, _first: number, count: number): void {
-    this.draws.push({ kind: 'arrays', count, texture: this.boundTexture, instances: null, blend: this.blendFactors, premul: this.premul })
+    this.draws.push({
+      kind: 'arrays',
+      count,
+      texture: this.boundTexture,
+      instances: null,
+      blend: this.blendFactors,
+      premul: this.premul,
+    })
     this.totalDraws++
   }
 

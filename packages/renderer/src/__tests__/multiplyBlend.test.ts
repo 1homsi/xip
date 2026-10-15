@@ -36,7 +36,10 @@ describe('multiply blend with partial alpha', () => {
     const { gl, rs, world } = setup()
     const e = world.createEntity()
     world.addComponent(e, createTransform(100, 50))
-    world.addComponent(e, createSprite({ width: 20, height: 20, color: '#ffffff', opacity: 0.5, blendMode: 'multiply' }))
+    world.addComponent(
+      e,
+      createSprite({ width: 20, height: 20, color: '#ffffff', opacity: 0.5, blendMode: 'multiply' }),
+    )
     rs.update(world, 1 / 60)
     const d = gl.draws.find((x) => x.blend[0] === DST_COLOR)!
     expect(whiteFactor(d, 0.5)).toBeCloseTo(1, 6)
