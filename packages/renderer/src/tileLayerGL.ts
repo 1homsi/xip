@@ -59,6 +59,8 @@ uniform ivec4 u_ts;
 uniform int u_margin;
 uniform float u_opacity;
 uniform vec4 u_layerTint;
+// 1 for the 'multiply' layer blend: premultiply so DST_COLOR x ONE_MINUS_SRC_ALPHA is dst * (1 - a + a * rgb).
+uniform float u_premul;
 uniform float u_jitter;
 uniform int u_hasTint;
 uniform int u_useAvg;
@@ -123,6 +125,7 @@ void main() {
   if (u_jitter > 0.0) c.rgb *= 1.0 + (float(h >> 8 & 255u) / 255.0 - 0.5) * u_jitter;
   if (u_hasBias == 1) c.rgb += texelFetch(u_bias, cell, 0).rgb * c.a;
   fragColor = vec4(c.rgb * u_layerTint.rgb, c.a * u_opacity * u_layerTint.a);
+  fragColor.rgb *= mix(1.0, fragColor.a, u_premul);
 }
 `
 
@@ -181,6 +184,7 @@ interface Uniforms {
   margin: WebGLUniformLocation | null
   opacity: WebGLUniformLocation | null
   layerTint: WebGLUniformLocation | null
+  premul: WebGLUniformLocation | null
   varSize: WebGLUniformLocation | null
   varW: WebGLUniformLocation | null
   pageCell: WebGLUniformLocation | null
@@ -431,6 +435,7 @@ export class TileLayerRenderer {
         (tc & 255) / 255,
       )
       if (layer.blend !== 'normal') setBlendFunc(gl, layer.blend)
+      gl.uniform1f(u.premul, layer.blend === 'multiply' ? 1 : 0)
       gl.uniform1ui(u.lutSize, s.lutTex ? layer.lutSize : 0)
       gl.uniform1i(u.lutW, s.lutW || 1)
       gl.uniform1ui(u.varSize, s.varTex ? layer.variantSize : 0)
@@ -554,6 +559,7 @@ export class TileLayerRenderer {
       margin: loc('u_margin'),
       opacity: loc('u_opacity'),
       layerTint: loc('u_layerTint'),
+      premul: loc('u_premul'),
       varSize: loc('u_varSize'),
       varW: loc('u_varW'),
       pageCell: loc('u_pageCell'),
