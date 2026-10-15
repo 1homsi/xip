@@ -19,6 +19,9 @@ type TextLayerRenderer = {
  * names.clear()
  * for (const p of people) names.add(p.name, p.x, p.y - 12, { color: 0xffffffff })
  * ```
+ *
+ * Mutating through the layer's methods (`add`, `setText`, `set`, `touch()` ...) wakes an `onDemand` loop.
+ * After writing the typed arrays directly call `layer.touch()`.
  */
 export function useTextLayer(options: TextLayerOptions = {}): TextLayer {
   const engine = useGame()
@@ -37,8 +40,13 @@ export function useTextLayer(options: TextLayerOptions = {}): TextLayer {
   useLayoutEffect(() => {
     const rs = engine.activeRenderSystem as TextLayerRenderer
     rs.addTextLayer?.(layer)
+    // touch(), set(), add() ... wake an onDemand loop; realtime loops ignore the call.
+    layer.onChange = () => engine.loop.markDirty()
     engine.loop.markDirty()
-    return () => rs.removeTextLayer?.(layer)
+    return () => {
+      layer.onChange = null
+      rs.removeTextLayer?.(layer)
+    }
   }, [engine, layer])
 
   return layer
