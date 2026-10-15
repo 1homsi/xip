@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { useState } from 'react'
 import { render, act } from '@testing-library/react'
 import { ECSWorld, EventBus, AssetManager, createTransform, createEngineStats } from '@xip/core'
-import { createSprite } from '@xip/renderer'
+import { createSprite, type SpriteComponent } from '@xip/renderer'
 import { EngineContext, type EngineState } from '../context'
 import { useHoverable } from '../hooks/useHoverable'
 
@@ -99,7 +99,7 @@ describe('useHoverable', () => {
     expect(hovered).toBe(false)
 
     // offset moves the box: centred, shifted by (30, 0) -> x in [20, 40]
-    const sprite = engine.ecs.getComponent<{ anchorX: number; anchorY: number; offsetX: number }>(id, 'Sprite')!
+    const sprite = engine.ecs.getComponent<SpriteComponent>(id, 'Sprite')!
     sprite.anchorX = 0.5
     sprite.anchorY = 0.5
     sprite.offsetX = 30
