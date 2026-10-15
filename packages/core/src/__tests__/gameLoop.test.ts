@@ -123,7 +123,7 @@ describe('GameLoop', () => {
   })
 
   describe('fixedDt', () => {
-    it('uses fixed dt instead of real elapsed time when fixedDt is set', () => {
+    it('accumulates real time before ticking at fixedDt in realtime mode', () => {
       const fixedTicks: number[] = []
       const fixedLoop = new GameLoop(
         (dt) => {
@@ -133,14 +133,109 @@ describe('GameLoop', () => {
       )
       _now = 0
       fixedLoop.start()
-      // Fire a frame with a large gap — should still get fixedDt
-      fireFrame(100)
-      expect(fixedTicks).toHaveLength(1)
+      // Six 144 Hz intervals represent about 1/24 second, or two full fixed steps.
+      for (const frame of [1, 2, 3, 4, 5, 6]) {
+        const time = (1000 * frame) / 144
+        fireFrame(time)
+      }
+      expect(fixedTicks).toHaveLength(2)
       expect(fixedTicks[0]).toBeCloseTo(1 / 60, 6)
-      // Fire another frame with different gap
-      fireFrame(150)
       expect(fixedTicks[1]).toBeCloseTo(1 / 60, 6)
       fixedLoop.stop()
+    })
+
+    it('keeps a nominal 60 Hz display at one fixed tick per frame', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      for (let frame = 1; frame <= 120; frame++) {
+        fireFrame((1000 * frame) / 60)
+      }
+
+      expect(fixedTicks).toHaveLength(120)
+      fixedLoop.stop()
+    })
+
+    it('ticks once per frame on a display slightly faster than the fixed rate', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      for (let frame = 1; frame <= 120; frame++) {
+        fireFrame(frame * 16.4)
+      }
+
+      expect(fixedTicks).toHaveLength(120)
+      fixedLoop.stop()
+    })
+
+    it('caps realtime fixed-step catch-up at five ticks per frame', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      fireFrame(99.9999995)
+      expect(fixedTicks).toHaveLength(5)
+      fireFrame(100)
+      expect(fixedTicks).toHaveLength(5)
+      fireFrame(117)
+      expect(fixedTicks).toHaveLength(6)
+      fixedLoop.stop()
+    })
+
+    it('preserves partial progress across pause without counting paused time', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      fireFrame(8)
+      fixedLoop.pause()
+
+      _now = 1000
+      fixedLoop.resume()
+      fireFrame(1008)
+      expect(fixedTicks).toHaveLength(0)
+      fireFrame(1009)
+      expect(fixedTicks).toHaveLength(1)
+      fixedLoop.stop()
+    })
+
+    it('resets partial progress when stopped and started again', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => fixedTicks.push(dt), { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      fireFrame(8)
+      fixedLoop.stop()
+
+      _now = 1000
+      fixedLoop.start()
+      fireFrame(1008)
+      expect(fixedTicks).toHaveLength(0)
+      fireFrame(1009)
+      expect(fixedTicks).toHaveLength(0)
+      fireFrame(1017)
+      expect(fixedTicks).toHaveLength(1)
+      fixedLoop.stop()
+    })
+
+    it('stops catch-up immediately when a tick stops the loop', () => {
+      let ticks = 0
+      let fixedLoop: GameLoop
+      fixedLoop = new GameLoop(
+        () => {
+          ticks++
+          fixedLoop.stop()
+        },
+        { fixedDt: 1 / 60 },
+      )
+      _now = 0
+      fixedLoop.start()
+      fireFrame(100)
+
+      expect(ticks).toBe(1)
+      expect(rafCallback).toBeNull()
     })
   })
 
