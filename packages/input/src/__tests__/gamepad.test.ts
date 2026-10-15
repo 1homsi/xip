@@ -103,8 +103,27 @@ describe('GamepadInput', () => {
     expect(gp.isDown(GamepadButton.A)).toBe(false)
     expect(gp.isReleased(GamepadButton.A)).toBe(true)
     expect(gp.isReleased('gamepad:LX+')).toBe(true)
+    expect(gp.isReleased('gamepad:LY+')).toBe(true)
+    expect(gp.isReleased(GamepadButton.RT)).toBe(true)
     gp.flush()
     expect(gp.isReleased(GamepadButton.A)).toBe(false)
+  })
+
+  it('does not keep release edges alive while polling sleeps after the last pad disconnects', () => {
+    mockPads[0] = makePad()
+    mockPads[0]!.buttons[GamepadButton.A].pressed = true
+    gp.attach() // gated polling: a pad is present at attach time, so it wakes up
+    gp.flush()
+    expect(gp.isDown(GamepadButton.A)).toBe(true)
+
+    mockPads[0] = null
+    gp.flush() // disconnect frame: release edge, then polling goes to sleep
+    expect(gp.isReleased(GamepadButton.A)).toBe(true)
+    gp.flush()
+    expect(gp.isReleased(GamepadButton.A)).toBe(false)
+    gp.flush()
+    expect(gp.isReleased(GamepadButton.A)).toBe(false)
+    gp.detach()
   })
 
   it('reads analog trigger values', () => {
@@ -177,6 +196,22 @@ describe('InputMap analog stick binding', () => {
     input.keyboard.held.delete('ArrowRight')
     input.keyboard.held.add('ArrowLeft')
     expect(map.getAxis(input, 'moveX')).toBeCloseTo(-0.4)
+  })
+
+  it('a vertical stick binding agrees with the keyboard: down is +1, up is -1', () => {
+    const input = new InputManager() as InputManager & { gamepad: GamepadInput }
+    const map = createInputMap({
+      moveY: { positive: ['ArrowDown'], negative: ['ArrowUp'], stick: 'lefty' },
+    })
+    mockPads[0] = makePad()
+    mockPads[0]!.axes = [0, 1, 0, 0] // stick pushed down (standard mapping: +1 = down)
+    input.flush()
+    expect(map.getAxis(input, 'moveY')).toBe(1)
+    mockPads[0]!.axes = [0, -1, 0, 0]
+    input.flush()
+    expect(map.getAxis(input, 'moveY')).toBe(-1)
+    input.keyboard.held.add('ArrowDown')
+    expect(map.getAxis(input, 'moveY')).toBe(0) // keyboard down cancels stick up
   })
 
   it('isActionDown fires for stick-only movement past dead zone', () => {

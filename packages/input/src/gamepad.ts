@@ -166,7 +166,14 @@ export class GamepadInput {
    */
   flush(): void {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return
-    if (this.gated && !this.active && !this.forced) return
+    if (this.gated && !this.active && !this.forced) {
+      // Asleep (no pad): the edges of the frame that put us to sleep (a disconnect) must not linger.
+      for (const state of this.pads) {
+        state.justPressed.clear()
+        state.justReleased.clear()
+      }
+      return
+    }
     const pads = navigator.getGamepads()
     let any = false
     for (let i = 0; i < this.pads.length; i++) {
