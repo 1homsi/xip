@@ -105,17 +105,27 @@ export async function downloadCanvas(
 }
 
 /**
+ * Source pixels per CSS pixel for a canvas. The backing store can be capped below
+ * `devicePixelRatio` (see the `maxDpr` prop on `<Game>`), so the ratio is derived from the canvas
+ * itself rather than the window; a canvas with no CSS size falls back to the device ratio.
+ */
+export function sourcePixelRatio(source: HTMLCanvasElement): number {
+  if (source.clientWidth > 0) return source.width / source.clientWidth
+  return window.devicePixelRatio || 1
+}
+
+/**
  * Copy a region of the source canvas (optionally rescaled) into a new offscreen
  * canvas via Canvas 2D. Works even when the source is WebGL — drawImage reads
  * from the current framebuffer.
  */
 function copyRegion(source: HTMLCanvasElement, region: ExportOptions['region'], scale: number): HTMLCanvasElement {
-  const dpr = window.devicePixelRatio || 1
+  const ratio = sourcePixelRatio(source)
   // Convert CSS-pixel region to physical source pixels
-  const sx = region ? region.x * dpr : 0
-  const sy = region ? region.y * dpr : 0
-  const sw = region ? region.width * dpr : source.width
-  const sh = region ? region.height * dpr : source.height
+  const sx = region ? region.x * ratio : 0
+  const sy = region ? region.y * ratio : 0
+  const sw = region ? region.width * ratio : source.width
+  const sh = region ? region.height * ratio : source.height
   const dw = Math.round(sw * scale)
   const dh = Math.round(sh * scale)
   const out = document.createElement('canvas')

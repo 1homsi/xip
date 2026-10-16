@@ -9,9 +9,10 @@ export interface CaptureFrameOptions {
   /** Encoder quality (0-1) for jpeg and webp. Default 0.92. */
   quality?: number
   /**
-   * Output size in pixels. Omit both for the canvas' own pixel size (CSS size
-   * times devicePixelRatio). Giving one keeps the aspect ratio; giving both
-   * stretches to that size.
+   * Output size in pixels. Omit both for the canvas' own pixel size (the backing
+   * store size: CSS size times the canvas' pixels per CSS pixel, which is
+   * `devicePixelRatio` unless the backing store is capped). Giving one keeps the
+   * aspect ratio; giving both stretches to that size.
    */
   width?: number
   height?: number

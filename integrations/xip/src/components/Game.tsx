@@ -82,6 +82,13 @@ export interface GameProps {
   height?: number
   /** Pixels per second squared downward (default 980) */
   gravity?: number
+  /**
+   * Upper bound on the canvas backing store's pixels per CSS pixel (default: none, it follows
+   * `devicePixelRatio`). A phone at DPR 3 draws 9 backing pixels per CSS pixel; `maxDpr={2}`
+   * draws 4 and lets the browser scale the canvas up. Coordinates stay in CSS pixels.
+   * `undefined`, `0`, negative and `NaN` all mean no cap; a value below 1 is a deliberate downscale.
+   */
+  maxDpr?: number
   /** Enable debug overlay: collider wireframes, FPS, entity count */
   debug?: boolean
   /**
@@ -167,6 +174,7 @@ export function Game({
   width = 800,
   height = 600,
   gravity = 980,
+  maxDpr,
   debug = false,
   devtools = false,
   scale = 'none',
@@ -511,10 +519,11 @@ export function Game({
     return () => mq.removeEventListener?.('change', onChange)
   }, [dpr])
 
+  const backingRatio = maxDpr && maxDpr > 0 ? Math.min(dpr, maxDpr) : dpr
   useEffect(() => {
     if (!engine) return
-    const physW = Math.round(width * dpr)
-    const physH = Math.round(height * dpr)
+    const physW = Math.max(1, Math.round(width * backingRatio))
+    const physH = Math.max(1, Math.round(height * backingRatio))
     const canvas = engine.canvas
     if (canvas.width !== physW) canvas.width = physW
     if (canvas.height !== physH) canvas.height = physH
@@ -522,7 +531,7 @@ export function Game({
     canvas.style.height = `${height}px`
     // Resizing the backing store clears the drawing buffer; an onDemand loop must repaint it.
     engine.loop.markDirty()
-  }, [width, height, engine, dpr])
+  }, [width, height, engine, backingRatio])
 
   // Sync gravity changes
   useEffect(() => {
