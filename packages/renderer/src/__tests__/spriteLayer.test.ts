@@ -120,6 +120,27 @@ describe('SpriteLayer', () => {
     expect(layer.pick(0, 30)).toBe(100)
   })
 
+  it('resize zeroes the position and size of new slots left over from cleared sprites', () => {
+    const layer = new SpriteLayer()
+    layer.add(10, 20, 30, 40)
+    layer.clear()
+    layer.resize(1)
+    expect([layer.x[0], layer.y[0], layer.w[0], layer.h[0]]).toEqual([0, 0, 0, 0])
+  })
+
+  it('resize zeroes slots left over by removeAt and by shrinking', () => {
+    const layer = new SpriteLayer()
+    layer.add(1, 2, 3, 4)
+    layer.add(5, 6, 7, 8)
+    layer.removeAt(0) // the last sprite swaps in and slot 1 keeps a stale copy
+    layer.resize(2)
+    expect([layer.x[1], layer.y[1], layer.w[1], layer.h[1]]).toEqual([0, 0, 0, 0])
+
+    layer.resize(0)
+    layer.resize(1)
+    expect([layer.x[0], layer.y[0], layer.w[0], layer.h[0]]).toEqual([0, 0, 0, 0])
+  })
+
   it('calls onChange for every mutation path, including atlas setters and touch()', () => {
     const layer = new SpriteLayer()
     const onChange = vi.fn()

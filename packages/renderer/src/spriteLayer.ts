@@ -441,6 +441,12 @@ export class SpriteLayer {
   }
 
   private reset(i: number, id: number): void {
+    // Slots past `count` keep the geometry of whatever sprite last used them, so a
+    // grow after clear()/removeAt() would draw ghosts at the old position and size.
+    this.x[i] = 0
+    this.y[i] = 0
+    this.w[i] = 0
+    this.h[i] = 0
     this.rotation[i] = 0
     this.frame[i] = 0
     this.atlas[i] = 0
