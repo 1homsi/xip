@@ -305,6 +305,36 @@ describe('ECSWorld', () => {
 })
 
 describe('Binary snapshot', () => {
+  it('preserves non-finite numbers and ordinary sentinel-shaped component data', () => {
+    const world = new ECSWorld()
+    const id = world.createEntity()
+    world.addComponent(id, {
+      type: 'Settings',
+      max: Infinity,
+      min: -Infinity,
+      invalid: NaN,
+      metadata: { $num: 'Infinity' },
+      nested: [{ $num: 'NaN' }, -Infinity],
+    })
+    const expected = {
+      type: 'Settings',
+      max: Infinity,
+      min: -Infinity,
+      invalid: NaN,
+      metadata: { $num: 'Infinity' },
+      nested: [{ $num: 'NaN' }, -Infinity],
+    }
+
+    const snapshot = world.getSnapshot()
+    const fromSnapshot = new ECSWorld()
+    fromSnapshot.restoreSnapshot(snapshot)
+    expect(fromSnapshot.getComponent(id, 'Settings')).toEqual(expected)
+
+    const fromBinary = new ECSWorld()
+    fromBinary.restoreSnapshotBinary(world.getSnapshotBinary())
+    expect(fromBinary.getComponent(id, 'Settings')).toEqual(expected)
+  })
+
   it('round-trips a world through binary format', () => {
     const world = new ECSWorld()
     const a = world.createEntity()
