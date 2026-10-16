@@ -250,6 +250,9 @@ export class SpriteLayer {
   private _blend: LayerBlendMode
   private _order = new Int32Array(0)
   private _inOrder = new Uint8Array(0)
+  private _orderTouched = new Int32Array(0)
+  private _orderOldPos = new Int32Array(0)
+  private _orderWasVisible = new Uint8Array(0)
   private _orderCount = 0
   private _orderKey = new Float64Array(0)
   private _orderKey2 = new Float64Array(0)
@@ -586,6 +589,13 @@ export class SpriteLayer {
       const inOrder = new Uint8Array(cap)
       inOrder.set(this._inOrder)
       this._inOrder = inOrder
+      this._orderTouched = new Int32Array(cap)
+      const orderOldPos = new Int32Array(cap)
+      orderOldPos.set(this._orderOldPos)
+      this._orderOldPos = orderOldPos
+      const orderWasVisible = new Uint8Array(cap)
+      orderWasVisible.set(this._orderWasVisible)
+      this._orderWasVisible = orderWasVisible
       const keys = new Float64Array(cap)
       keys.set(this._orderKey)
       this._orderKey = keys
@@ -636,6 +646,101 @@ export class SpriteLayer {
       this.orderVersion++
       this.orderCount = this._orderCount
       this._orderedSlotCount = n
+      this._orderDirtyAll = false
+      this._orderDirtyLo = 0x7fffffff
+      this._orderDirtyHi = -1
+      return order
+    }
+    const dirtyFirst = Math.max(0, this._orderDirtyLo)
+    const dirtyLast = Math.min(n - 1, this._orderDirtyHi)
+    if (!dirtyAll && n === this._orderedSlotCount && dirtyLast - dirtyFirst + 1 <= Math.max(16, n >>> 3)) {
+      const touched = this._orderTouched
+      let touchedCount = 0
+      let changed = false
+      for (let slot = dirtyFirst; slot <= dirtyLast; slot++) {
+        const key2 = K2 ? K2[slot] : 0
+        const keysChanged = !Object.is(this._orderKey[slot], K[slot]) || !Object.is(this._orderKey2[slot], key2)
+        const flagsChanged = this._orderFlags[slot] !== (flags[slot] & SPRITE_HIDDEN)
+        if (!keysChanged && !flagsChanged) continue
+
+        const wasVisible = this._inOrder[slot] !== 0
+        touched[touchedCount++] = slot
+        this._orderWasVisible[slot] = wasVisible ? 1 : 0
+        this._orderOldPos[slot] = wasVisible ? this.findOrderPosition(slot, order, this._orderCount) : -1
+      }
+      let needsReorder = false
+      for (let i = 0; i < touchedCount; i++) {
+        const slot = touched[i]
+        const wasVisible = this._orderWasVisible[slot] !== 0
+        const isVisible = (flags[slot] & SPRITE_HIDDEN) === 0
+        if (wasVisible !== isVisible) {
+          needsReorder = true
+          break
+        }
+        if (wasVisible) {
+          const pos = this._orderOldPos[slot]
+          if (
+            (pos > 0 && this.compareOrder(order[pos - 1], slot, K, K2) > 0) ||
+            (pos + 1 < this._orderCount && this.compareOrder(slot, order[pos + 1], K, K2) > 0)
+          ) {
+            needsReorder = true
+            break
+          }
+        }
+      }
+      if (!needsReorder) {
+        for (let i = 0; i < touchedCount; i++) {
+          const slot = touched[i]
+          this._orderKey[slot] = K[slot]
+          this._orderKey2[slot] = K2 ? K2[slot] : 0
+          this._orderFlags[slot] = flags[slot] & SPRITE_HIDDEN
+        }
+        this.orderCount = this._orderCount
+        this._orderDirtyLo = 0x7fffffff
+        this._orderDirtyHi = -1
+        return order
+      }
+      for (let i = 0; i < touchedCount; i++) {
+        const slot = touched[i]
+        if (this._orderWasVisible[slot] !== 0) {
+          const pos = this.findOrderPosition(slot, order, this._orderCount)
+          order.copyWithin(pos, pos + 1, this._orderCount)
+          this._orderCount--
+          this._inOrder[slot] = 0
+        }
+      }
+      for (let i = 0; i < touchedCount; i++) {
+        const slot = touched[i]
+        this._orderKey[slot] = K[slot]
+        this._orderKey2[slot] = K2 ? K2[slot] : 0
+        this._orderFlags[slot] = flags[slot] & SPRITE_HIDDEN
+      }
+      for (let i = 0; i < touchedCount; i++) {
+        const slot = touched[i]
+        const wasVisible = this._orderWasVisible[slot] !== 0
+        const isVisible = (flags[slot] & SPRITE_HIDDEN) === 0
+        if (isVisible) {
+          let lo = 0
+          let hi = this._orderCount
+          while (lo < hi) {
+            const mid = (lo + hi) >>> 1
+            if (this.compareOrder(order[mid], slot, K, K2) < 0) lo = mid + 1
+            else hi = mid
+          }
+          order.copyWithin(lo + 1, lo, this._orderCount)
+          order[lo] = slot
+          this._orderCount++
+          this._inOrder[slot] = 1
+        }
+        if (
+          wasVisible !== isVisible ||
+          (wasVisible && this._orderOldPos[slot] !== this.findOrderPosition(slot, order, this._orderCount))
+        ) {
+          changed = true
+        }
+      }
+      if (changed) this.orderVersion++
+      this.orderCount = this._orderCount
       this._orderDirtyAll = false
       this._orderDirtyLo = 0x7fffffff
       this._orderDirtyHi = -1
@@ -712,6 +817,25 @@ export class SpriteLayer {
       if (secondary !== 0) return secondary
     }
     return a - b
+  }
+
+  /** Find a slot in the retained order using the key snapshot that built it. */
+  private findOrderPosition(slot: number, order: Int32Array, count: number): number {
+    let lo = 0
+    let hi = count
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (this.compareSnapshot(order[mid], slot) < 0) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  private compareSnapshot(a: number, b: number): number {
+    const primary = this.compareKey(this._orderKey[a], this._orderKey[b])
+    if (primary !== 0) return primary
+    const secondary = this.compareKey(this._orderKey2[a], this._orderKey2[b])
+    return secondary !== 0 ? secondary : a - b
   }
 
   /** Compare number keys with a consistent NaN placement for sorting. */
