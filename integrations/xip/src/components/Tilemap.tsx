@@ -191,6 +191,8 @@ export function Tilemap({
     const createdEntities: EntityId[] = []
     // Per-effect instance — not shared across Tilemap instances or re-mounts.
     const animatedTiles = new Map<EntityId, AnimatedTileState>()
+    // Set by the cleanup. A fetch that resolves after unmount or a src change must not create entities.
+    let cancelled = false
 
     async function load() {
       let mapData: TiledMap
@@ -199,12 +201,14 @@ export function Tilemap({
         if (!res.ok) throw new Error(`Tilemap fetch for "${src}" returned HTTP ${res.status} ${res.statusText}`)
         mapData = (await res.json()) as TiledMap
       } catch (err) {
+        if (cancelled) return
         const message = err instanceof Error ? err.message : String(err)
         engine?.events.emit('asset:error', { type: 'tilemap', src, error: err })
         // eslint-disable-next-line no-console
         console.error(`[Xip] <Tilemap> failed to load "${src}": ${message}`)
         return
       }
+      if (cancelled) return
 
       const { tilewidth, tileheight, tilesets } = mapData
 
@@ -449,6 +453,7 @@ export function Tilemap({
     load()
 
     return () => {
+      cancelled = true
       for (const eid of createdEntities) {
         animatedTiles.delete(eid)
         if (engine.ecs.hasEntity(eid)) engine.ecs.destroyEntity(eid)
