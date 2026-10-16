@@ -57,6 +57,7 @@ export function createCanvas2DStats(): RenderStats {
     gpuMs: null,
     gpuMsAvg: null,
     gpuTimerSupported: null,
+    softwareRenderer: null,
     layers: [],
     tile: {
       indexUploads: 0,

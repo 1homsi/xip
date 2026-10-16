@@ -60,6 +60,16 @@ import type { TileLayerRenderStats } from '@xip/core'
 import type { TileLayerData } from './tileLayer'
 import type { GpuTiming } from './gpuTimer'
 
+// Renderer strings of CPU rasterizers (Chrome's SwiftShader, Mesa llvmpipe / softpipe).
+const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software/i
+
+/** `true` when the context's renderer is a CPU rasterizer, `null` when the browser hides it. */
+function isSoftwareRenderer(gl: WebGL2RenderingContext): boolean | null {
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info') as { UNMASKED_RENDERER_WEBGL: number } | null
+  if (!dbg) return null
+  return SOFTWARE_RENDERER.test(String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)))
+}
+
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
 interface SpriteComponent {
@@ -1655,6 +1665,7 @@ export class RenderSystem implements System {
     const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, premultipliedAlpha: false })
     if (!gl) throw new Error('[WebGLRenderer] WebGL2 is not supported in this browser')
     this.gl = gl
+    this.stats.softwareRenderer = isSoftwareRenderer(gl)
     this.initGL()
     canvas.addEventListener?.('webglcontextlost', this.onContextLost)
     canvas.addEventListener?.('webglcontextrestored', this.onContextRestored)
