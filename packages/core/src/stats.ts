@@ -86,6 +86,12 @@ export interface RenderStats {
   gpuMsAvg: number | null
   /** `null` = GPU timing not requested, `false` = requested but unsupported/lost, `true` = measuring. */
   gpuTimerSupported: boolean | null
+  /**
+   * `true` when the WebGL renderer string names a software rasterizer (SwiftShader, llvmpipe, ...),
+   * so the frame runs on the CPU. `null` when unknown: the Canvas2D backend, or the browser hides the
+   * renderer (no WEBGL_debug_renderer_info).
+   */
+  softwareRenderer: boolean | null
   /** frame: per-layer breakdown of the SpriteLayers / TileLayers drawn (tile layers first, then sprite layers in draw order). */
   layers: LayerStats[]
   /** TileLayer upload/draw/texture counters (the renderer's `tileLayerStats`, kept up to date every frame). */
@@ -111,6 +117,7 @@ export function createRenderStats(): RenderStats {
     gpuMs: null,
     gpuMsAvg: null,
     gpuTimerSupported: null,
+    softwareRenderer: null,
     layers: [],
     tile: createTileLayerRenderStats(),
   }
