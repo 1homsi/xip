@@ -152,6 +152,8 @@ describe('SpriteLayer', () => {
     rs2.addSpriteLayer(layer)
     expect(layer.pixelSource!(layer.atlases[0])).toBe(c2.canvas)
     expect(layer.pixelSource!(layer.atlases[0])).not.toBe(c1.canvas)
+    rs1.removeSpriteLayer(layer)
+    expect(layer.pixelSource!(layer.atlases[0])).toBe(c2.canvas)
   })
 
   it('calls onChange for every mutation path, including atlas setters and touch()', () => {
