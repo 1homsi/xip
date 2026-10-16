@@ -191,7 +191,9 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
 
     onConnect(handler: () => void): void {
       connectHandlers.push(handler)
-      if (channel?.readyState === 'open') handler()
+      // Fire now only when the link is up. During a transient 'disconnected' the channel can
+      // still be open, and a handler that fired here as well as on the recovery would run twice.
+      if (link === 'up') handler()
     },
 
     onDisconnect(handler: () => void): void {
