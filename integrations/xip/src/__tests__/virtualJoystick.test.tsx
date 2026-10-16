@@ -224,6 +224,11 @@ describe('VirtualJoystick pointer events', () => {
     expect(useVirtualInput().axisX).toBeGreaterThan(0)
 
     act(() => {
+      base.dispatchEvent(makePointerEvent('lostpointercapture', { pointerId: 2 }))
+    })
+    expect(useVirtualInput().axisX).toBeGreaterThan(0)
+
+    act(() => {
       base.dispatchEvent(makePointerEvent('lostpointercapture', { pointerId: 1 }))
     })
 
@@ -261,8 +266,26 @@ describe('VirtualJoystick pointer events', () => {
     expect(useVirtualInput().button('jump')).toBe(true)
 
     act(() => {
+      button.dispatchEvent(makePointerEvent('lostpointercapture', { pointerId: 8 }))
+    })
+    expect(useVirtualInput().button('jump')).toBe(true)
+
+    act(() => {
       button.dispatchEvent(makePointerEvent('lostpointercapture', { pointerId: 7 }))
     })
+    expect(useVirtualInput().button('jump')).toBe(false)
+  })
+
+  it('disabling the action button releases its held virtual button', () => {
+    const { container, rerender } = render(<VirtualJoystick actionButton actionName="jump" />)
+    const button = container.lastElementChild as HTMLElement
+
+    act(() => {
+      button.dispatchEvent(makePointerEvent('pointerdown', { pointerId: 7 }))
+    })
+    expect(useVirtualInput().button('jump')).toBe(true)
+
+    rerender(<VirtualJoystick actionButton={false} actionName="jump" />)
     expect(useVirtualInput().button('jump')).toBe(false)
   })
 

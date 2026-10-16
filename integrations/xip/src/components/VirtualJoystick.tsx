@@ -57,8 +57,8 @@ export function VirtualJoystick({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (activePtr.current !== null) return
-    activePtr.current = e.pointerId
     ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+    activePtr.current = e.pointerId
     const rect = baseRef.current!.getBoundingClientRect()
     baseCenterRef.current = {
       x: rect.left + rect.width / 2,
@@ -81,8 +81,8 @@ export function VirtualJoystick({
 
   const handleActionDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (activeActionPtr.current !== null) return
-    activeActionPtr.current = e.pointerId
     e.currentTarget.setPointerCapture(e.pointerId)
+    activeActionPtr.current = e.pointerId
     setVirtualButton(actionName, true)
   }
 
