@@ -1650,7 +1650,14 @@ export class RenderSystem implements System {
     private readonly canvas: HTMLCanvasElement,
     private readonly entityIds: Map<string, EntityId>,
   ) {
-    const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, premultipliedAlpha: false })
+    const gl = canvas.getContext('webgl2', {
+      alpha: false,
+      antialias: false,
+      premultipliedAlpha: false,
+      // The renderer never enables depth testing or stencil; clear is COLOR_BUFFER_BIT only.
+      depth: false,
+      stencil: false,
+    })
     if (!gl) throw new Error('[WebGLRenderer] WebGL2 is not supported in this browser')
     this.gl = gl
     this.initGL()
