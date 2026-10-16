@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { setVirtualAxis, setVirtualButton } from '../hooks/useVirtualInput'
 
 export interface VirtualJoystickProps {
@@ -45,6 +45,7 @@ export function VirtualJoystick({
   const baseRef = useRef<HTMLDivElement>(null)
   const stickRef = useRef<HTMLDivElement>(null)
   const activePtr = useRef<number | null>(null)
+  const activeActionPtr = useRef<number | null>(null)
   const baseCenterRef = useRef({ x: 0, y: 0 })
 
   const radius = size / 2 - 16
@@ -56,8 +57,8 @@ export function VirtualJoystick({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (activePtr.current !== null) return
-    activePtr.current = e.pointerId
     ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+    activePtr.current = e.pointerId
     const rect = baseRef.current!.getBoundingClientRect()
     baseCenterRef.current = {
       x: rect.left + rect.width / 2,
@@ -77,6 +78,39 @@ export function VirtualJoystick({
     setVirtualAxis(0, 0)
     applyStickPosition(0, 0)
   }
+
+  const handleActionDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeActionPtr.current !== null) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    activeActionPtr.current = e.pointerId
+    setVirtualButton(actionName, true)
+  }
+
+  const handleActionEnd = (e: React.PointerEvent) => {
+    if (e.pointerId !== activeActionPtr.current) return
+    activeActionPtr.current = null
+    setVirtualButton(actionName, false)
+  }
+
+  useEffect(
+    () => () => {
+      if (activePtr.current !== null) {
+        activePtr.current = null
+        setVirtualAxis(0, 0)
+      }
+    },
+    [],
+  )
+
+  useEffect(
+    () => () => {
+      if (activeActionPtr.current !== null) {
+        activeActionPtr.current = null
+        setVirtualButton(actionName, false)
+      }
+    },
+    [actionButton, actionName],
+  )
 
   const updateFromPointer = (clientX: number, clientY: number) => {
     const dx = clientX - baseCenterRef.current.x
@@ -110,6 +144,7 @@ export function VirtualJoystick({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onLostPointerCapture={handlePointerUp}
         style={{
           position: 'absolute',
           width: size,
@@ -146,12 +181,10 @@ export function VirtualJoystick({
       {/* Optional action button */}
       {actionButton && (
         <div
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId)
-            setVirtualButton(actionName, true)
-          }}
-          onPointerUp={() => setVirtualButton(actionName, false)}
-          onPointerCancel={() => setVirtualButton(actionName, false)}
+          onPointerDown={handleActionDown}
+          onPointerUp={handleActionEnd}
+          onPointerCancel={handleActionEnd}
+          onLostPointerCapture={handleActionEnd}
           style={{
             position: 'absolute',
             width: size * 0.55,
