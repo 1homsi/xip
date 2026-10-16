@@ -158,7 +158,9 @@ export class AssetManager {
     set.add(source)
     source.onended = () => {
       set!.delete(source)
-      if (set!.size === 0) this.activeSources.delete(src)
+      if (this.activeSources.get(src) === set && set!.size === 0) {
+        this.activeSources.delete(src)
+      }
     }
   }
 
