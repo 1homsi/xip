@@ -165,6 +165,21 @@ describe('Keyboard', () => {
       editor.remove()
     })
 
+    it('treats contenteditable="inherit" as its parent: a non-editable parent stays game input', () => {
+      const outer = document.createElement('div')
+      const inner = document.createElement('div')
+      inner.setAttribute('contenteditable', 'inherit')
+      outer.append(inner)
+      document.body.append(outer)
+      keyboard.detach()
+      keyboard.attach(window)
+      inner.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true }))
+
+      expect(keyboard.isDown('KeyW')).toBe(true)
+
+      outer.remove()
+    })
+
     it('releases a game key if focus moves to an editable target before keyup', () => {
       const input = document.createElement('textarea')
       document.body.append(input)
