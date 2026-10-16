@@ -23,8 +23,8 @@ export interface RoomConfig {
 
 const PING_MSG_TYPE = 'room:ping'
 const PONG_MSG_TYPE = 'room:pong'
-const PEER_JOIN_TYPE = 'peer:join'
-const PEER_LEAVE_TYPE = 'peer:leave'
+export const PEER_JOIN_TYPE = 'peer:join'
+export const PEER_LEAVE_TYPE = 'peer:leave'
 
 /** Pending pings older than this are dropped as lost — bounds memory when a pong never arrives. */
 const PING_TIMEOUT_MS = 10_000
