@@ -104,7 +104,7 @@ describe('useCameraPanZoom', () => {
     const zoom = cam.zoom
     ptr('pointermove', 310, 300, 1) // the remaining finger pans from where it is
     expect(cam.zoom).toBe(zoom)
-    expect(cam.x).toBeCloseTo(x - 10)
+    expect(cam.x).toBeCloseTo(x - 10 / zoom)
     ptr('pointerup', 310, 300, 1)
     expect(onTap).not.toHaveBeenCalled()
     ptr('pointercancel', 5, 5, 9) // a pointer we never saw
