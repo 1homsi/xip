@@ -187,6 +187,22 @@ describe('Audio system', () => {
       expect(_getBufferCache().has('/loop.wav')).toBe(false)
       expect(_getBufferRefCount().has('/loop.wav')).toBe(false)
     })
+
+    it('a crossfade that finishes loading after unmount starts nothing and releases its buffer', async () => {
+      const { useSound, _getBufferCache, _getBufferRefCount } = await import('../useSound')
+
+      const controls = useSound('/intro.wav')
+      flushEffects()
+      await vi.waitFor(() => expect(_getBufferCache().has('/intro.wav')).toBe(true))
+
+      controls.crossfadeTo('/loop.wav', 0.25)
+      runCleanups() // unmount while /loop.wav is still loading
+      await new Promise((r) => setTimeout(r, 10))
+
+      expect(createdSources.every((s) => s.start.mock.calls.length === 0)).toBe(true)
+      expect(controls.isPlaying).toBe(false)
+      expect(_getBufferRefCount().has('/loop.wav')).toBe(false)
+    })
   })
 
   describe('maxInstances limits concurrent source nodes', () => {
