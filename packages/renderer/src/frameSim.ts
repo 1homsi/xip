@@ -264,6 +264,9 @@ export function updateAnimation(world: ECSWorld, dt: number): void {
               // Will be resolved next frame (or this frame via _resolvedClip check above)
             }
           }
+          // Done: stop stepping, or the clamped last index fires its event once per excess step
+          anim.timer = 0
+          break
         }
       }
       // Fire frame event for the new frame index (0-based position in frames array)
