@@ -100,6 +100,9 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
   const channelConfig: RTCDataChannelInit = ordered ? { ordered: true } : { ordered: false, maxRetransmits }
 
   let channel: RTCDataChannel | null = null
+  // Each handler set fires once per transition: a transient 'disconnected' that recovers
+  // reports the connect again, and 'disconnected' -> 'failed' -> close reports one drop.
+  let link: 'idle' | 'up' | 'down' = 'idle'
 
   const messageHandlers: Array<(data: string) => void> = []
   const binaryHandlers: Array<(data: ArrayBuffer) => void> = []
@@ -124,23 +127,43 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
   // DTLS + data-channel status into one signal.
   pc.addEventListener('connectionstatechange', () => {
     if (FAILED_CONNECTION_STATES.has(pc.connectionState)) {
-      for (const h of disconnectHandlers) h()
+      notifyDisconnect()
+    } else if (pc.connectionState === 'connected' && channel?.readyState === 'open') {
+      // 'disconnected' is often transient: the channel survives and ICE recovers, so the
+      // channel's 'open' event never fires again. Report the recovery here.
+      notifyConnect()
     }
   })
+
+  function notifyConnect(): void {
+    if (link === 'up') return
+    link = 'up'
+    for (const h of connectHandlers) h()
+  }
+
+  function notifyDisconnect(): void {
+    if (link === 'down') return
+    link = 'down'
+    for (const h of disconnectHandlers) h()
+  }
 
   function setupChannel(ch: RTCDataChannel): void {
     channel = ch
     ch.binaryType = 'arraybuffer'
 
     ch.addEventListener('open', () => {
-      for (const h of connectHandlers) h()
+      // A second datachannel replaces this one; only the active channel drives link state.
+      if (channel !== ch) return
+      notifyConnect()
     })
 
     ch.addEventListener('close', () => {
-      for (const h of disconnectHandlers) h()
+      if (channel !== ch) return
+      notifyDisconnect()
     })
 
     ch.addEventListener('message', (event: MessageEvent) => {
+      if (channel !== ch) return // replaced channels must not deliver messages
       if (event.data instanceof ArrayBuffer) {
         for (const h of binaryHandlers) h(event.data)
       } else {
@@ -172,7 +195,9 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
 
     onConnect(handler: () => void): void {
       connectHandlers.push(handler)
-      if (channel?.readyState === 'open') handler()
+      // Fire now only when the link is up. During a transient 'disconnected' the channel can
+      // still be open, and a handler that fired here as well as on the recovery would run twice.
+      if (link === 'up') handler()
     },
 
     onDisconnect(handler: () => void): void {
