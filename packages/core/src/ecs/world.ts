@@ -780,7 +780,14 @@ export class ECSWorld {
 
   /** Restore world state from a previously captured snapshot. */
   restoreSnapshot(snapshot: WorldSnapshot): void {
-    this.clear()
+    // The restore drops every live entity the snapshot does not carry; those
+    // ids are destroyed for good, so tell the listeners. Ids present in the
+    // snapshot survive (they keep their id, only the components are replaced),
+    // and must not be reported as destroyed.
+    const carried = new Set<EntityId>()
+    for (const { id } of snapshot.entities) carried.add(id)
+    const destroyed = this.liveEntityIds().filter((id) => !carried.has(id))
+    this.resetStorage()
     this.nextId = snapshot.nextId
     this._rngState = snapshot.rngState
     // Pre-intern every component type so columns exist before slot packing.
@@ -804,6 +811,7 @@ export class ECSWorld {
       this.entityArchetype.set(id, arch)
     }
     this.dirtyAll = true
+    this.notifyDestroyed(destroyed)
   }
 
   // ── Binary snapshot ─────────────────────────────────────────────────────────
@@ -1009,7 +1017,36 @@ export class ECSWorld {
     }
   }
 
+  /** Live entity ids in slot order (a copy). */
+  private liveEntityIds(): EntityId[] {
+    const ids: EntityId[] = new Array(this.liveCount)
+    for (let slot = 0; slot < this.liveCount; slot++) ids[slot] = this.idOfSlot[slot]
+    return ids
+  }
+
+  /** Report every id in `ids` as destroyed to the subscribers. */
+  private notifyDestroyed(ids: EntityId[]): void {
+    if (this.destroyListeners.size === 0) return
+    // A listener may create an entity. Keep every removed id reserved until
+    // the whole batch has been reported, so that later callbacks cannot see a
+    // destroyed id become live again during the same notification pass.
+    for (const id of ids) this.nextId = Math.max(this.nextId, id + 1)
+    for (const id of ids) {
+      // Fire subscribers — copy to avoid mutation-during-iteration if one unsubscribes.
+      for (const cb of Array.from(this.destroyListeners)) cb(id)
+    }
+  }
+
   clear(): void {
+    const destroyed = this.liveEntityIds()
+    this.resetStorage()
+    this.notifyDestroyed(destroyed)
+  }
+
+  /** Drop all entity and component state, keeping world configuration and the
+   *  interned type table. Does not fire destroy listeners: `clear()` and
+   *  `restoreSnapshot()` do that themselves, with the ids that really went. */
+  private resetStorage(): void {
     // Keep the interned type table and the column objects: callers cache
     // numeric type IDs (`typeId`) for the world's lifetime, so a reset must
     // not renumber them. Only the contents are dropped. Do not clear typeIds
