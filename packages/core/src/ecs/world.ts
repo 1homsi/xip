@@ -124,15 +124,6 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * objects in V8 (structuredClone's generality costs several µs extra per call),
  * so JSON stays despite looking naive.
  */
-/** Pick a marker absent from the component's JSON, so tagged numbers cannot
- * be confused with ordinary component strings. */
-function _snapshotNumberMarker(value: unknown): string {
-  const json = JSON.stringify(value)
-  let marker = '~'
-  while (json.includes(marker)) marker += '~'
-  return marker
-}
-
 function _cloneComponent<T>(comp: T): T {
   return structuredClone(comp)
 }
@@ -861,11 +852,14 @@ export class ECSWorld {
         const rest = { ...comp } as Record<string, unknown>
         delete rest['type']
         const tb = enc.encode(col.name)
-        const marker = _snapshotNumberMarker(rest)
         const json =
-          marker +
+          '~' +
           JSON.stringify(rest, (_k, v) =>
-            typeof v === 'number' && !isFinite(v) ? marker + (v === Infinity ? 'i' : v === -Infinity ? 'm' : 'n') : v,
+            typeof v === 'number' && !isFinite(v)
+              ? '~' + (v === Infinity ? 'i' : v === -Infinity ? 'm' : 'n')
+              : typeof v === 'string' && v[0] === '~'
+                ? '~' + v
+                : v,
           )
         const db = enc.encode(json)
         encoded.push({ tb, db })
@@ -939,8 +933,20 @@ export class ECSWorld {
         const json = dec.decode(data.subarray(o, o + dataLen))
         const bodyStart = json.indexOf('{')
         const marker = json.slice(0, bodyStart)
-        const body = JSON.parse(json.slice(bodyStart), (_k, v) =>
-          v === marker + 'i' ? Infinity : v === marker + 'm' ? -Infinity : v === marker + 'n' ? NaN : v,
+        const body = JSON.parse(
+          json.slice(bodyStart),
+          marker
+            ? (_k, v) =>
+                v === '~i'
+                  ? Infinity
+                  : v === '~m'
+                    ? -Infinity
+                    : v === '~n'
+                      ? NaN
+                      : typeof v === 'string' && v.startsWith('~~')
+                        ? v.slice(1)
+                        : v
+            : undefined,
         ) as Record<string, unknown>
         o += dataLen
         components.push({ type, ...body } as Component)

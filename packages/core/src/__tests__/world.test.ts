@@ -305,6 +305,37 @@ describe('ECSWorld', () => {
 })
 
 describe('Binary snapshot', () => {
+  it('restores legacy binary snapshots without reinterpreting ordinary strings', () => {
+    const enc = new TextEncoder()
+    const type = enc.encode('Values')
+    const body = enc.encode('{"text":"i","nested":["m","n"]}')
+    const data = new Uint8Array(12 + 6 + 2 + type.length + 4 + body.length)
+    const view = new DataView(data.buffer)
+    const u8 = data
+    let offset = 0
+    view.setUint32(offset, 1, true)
+    offset += 4
+    view.setUint32(offset, 0, true)
+    offset += 4
+    view.setUint32(offset, 1, true)
+    offset += 4
+    view.setUint32(offset, 0, true)
+    offset += 4
+    view.setUint16(offset, 1, true)
+    offset += 2
+    view.setUint16(offset, type.length, true)
+    offset += 2
+    u8.set(type, offset)
+    offset += type.length
+    view.setUint32(offset, body.length, true)
+    offset += 4
+    u8.set(body, offset)
+
+    const world = new ECSWorld()
+    world.restoreSnapshotBinary(data)
+    expect(world.getComponent(0, 'Values')).toEqual({ type: 'Values', text: 'i', nested: ['m', 'n'] })
+  })
+
   it('preserves non-finite numbers and ordinary sentinel-shaped component data', () => {
     const world = new ECSWorld()
     const id = world.createEntity()
