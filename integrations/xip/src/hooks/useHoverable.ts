@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import type { ECSWorld, EntityId, TransformComponent } from '@xip/core'
 import type { Camera2DComponent, SpriteComponent } from '@xip/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@xip/physics'
@@ -53,6 +53,10 @@ export function useHoverable(options?: HoverableOptions): HoverableControls {
   const ctxEntityId = useContext(EntityContext)
   const entityId = options?.entityId ?? ctxEntityId
   const [isHovered, setIsHovered] = useState(false)
+  // Callers pass inline option objects: read them through a ref so the listeners (and the `hovered`
+  // flag they close over) survive re-renders, including the one setIsHovered itself causes.
+  const optsRef = useRef(options)
+  optsRef.current = options
 
   useEffect(() => {
     if (!engine || entityId === null || entityId === undefined || options?.disabled) return
@@ -69,28 +73,38 @@ export function useHoverable(options?: HoverableOptions): HoverableControls {
       // Convert to world using camera
       const world = screenToWorld(engine, cssX, cssY)
       if (!world) return
-      const bounds = options?.bounds ?? deriveBounds(engine.ecs, entityId as EntityId)
+      const custom = optsRef.current?.bounds
+      const bounds = custom
+        ? { ...custom, ax: 0.5, ay: 0.5, ox: 0, oy: 0, fx: 1, fy: 1 }
+        : deriveBounds(engine.ecs, entityId as EntityId)
       if (!bounds) return
-      const halfW = (bounds.width * Math.abs(t.scaleX)) / 2
-      const halfH = (bounds.height * Math.abs(t.scaleY)) / 2
-      // Rotate the pointer into the entity's local frame
+      const w = bounds.width * t.scaleX
+      const h = bounds.height * t.scaleY
+      // Invert the entity's rotation and sprite flips to get renderer-local coordinates.
       const dx = world.x - t.x
       const dy = world.y - t.y
       const cos = Math.cos(-t.rotation)
       const sin = Math.sin(-t.rotation)
-      const localX = dx * cos - dy * sin
-      const localY = dx * sin + dy * cos
-      const inside = Math.abs(localX) <= halfW && Math.abs(localY) <= halfH
+      const localX = (dx * cos - dy * sin) * bounds.fx
+      const localY = (dx * sin + dy * cos) * bounds.fy
+      // The box spans [-anchor * size + offset, (1 - anchor) * size + offset], as the renderer draws it
+      const left = -bounds.ax * w + bounds.ox
+      const top = -bounds.ay * h + bounds.oy
+      const inside =
+        localX >= Math.min(left, left + w) &&
+        localX <= Math.max(left, left + w) &&
+        localY >= Math.min(top, top + h) &&
+        localY <= Math.max(top, top + h)
 
       if (inside && !hovered) {
         hovered = true
         setIsHovered(true)
-        options?.onEnter?.(entityId as EntityId)
+        optsRef.current?.onEnter?.(entityId as EntityId)
         engine.loop.markDirty()
       } else if (!inside && hovered) {
         hovered = false
         setIsHovered(false)
-        options?.onLeave?.(entityId as EntityId)
+        optsRef.current?.onLeave?.(entityId as EntityId)
         engine.loop.markDirty()
       }
     }
@@ -99,7 +113,7 @@ export function useHoverable(options?: HoverableOptions): HoverableControls {
       if (hovered) {
         hovered = false
         setIsHovered(false)
-        options?.onLeave?.(entityId as EntityId)
+        optsRef.current?.onLeave?.(entityId as EntityId)
         engine.loop.markDirty()
       }
     }
@@ -109,21 +123,45 @@ export function useHoverable(options?: HoverableOptions): HoverableControls {
     return () => {
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerleave', onLeaveCanvas)
+      if (hovered) setIsHovered(false)
     }
-  }, [engine, entityId, options])
+  }, [engine, entityId, options?.disabled])
 
   return { isHovered }
 }
 
 // ── Internals ────────────────────────────────────────────────────────────────
 
-function deriveBounds(ecs: ECSWorld, id: EntityId): { width: number; height: number } | null {
+interface HitBox {
+  width: number
+  height: number
+  /** Anchor (0 = left/top .. 1 = right/bottom) and draw offset of the box, in the entity's local frame. */
+  ax: number
+  ay: number
+  ox: number
+  oy: number
+  fx: number
+  fy: number
+}
+
+function deriveBounds(ecs: ECSWorld, id: EntityId): HitBox | null {
   const sprite = ecs.getComponent<SpriteComponent>(id, 'Sprite')
-  if (sprite) return { width: sprite.width, height: sprite.height }
+  if (sprite)
+    return {
+      width: sprite.width,
+      height: sprite.height,
+      ax: sprite.anchorX ?? 0.5,
+      ay: sprite.anchorY ?? 0.5,
+      ox: sprite.offsetX ?? 0,
+      oy: sprite.offsetY ?? 0,
+      fx: sprite.flipX ? -1 : 1,
+      fy: sprite.flipY ? -1 : 1,
+    }
   const box = ecs.getComponent<BoxColliderComponent>(id, 'BoxCollider')
-  if (box) return { width: box.width, height: box.height }
+  if (box) return { width: box.width, height: box.height, ax: 0.5, ay: 0.5, ox: 0, oy: 0, fx: 1, fy: 1 }
   const circle = ecs.getComponent<CircleColliderComponent>(id, 'CircleCollider')
-  if (circle) return { width: circle.radius * 2, height: circle.radius * 2 }
+  if (circle)
+    return { width: circle.radius * 2, height: circle.radius * 2, ax: 0.5, ay: 0.5, ox: 0, oy: 0, fx: 1, fy: 1 }
   return null
 }
 
