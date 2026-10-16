@@ -129,48 +129,59 @@ export function createTimeline(opts?: TimelineOptions): TweenTimeline {
       if (!running || complete) return
       elapsed += dt
 
-      let allDone = true
-      for (const seg of segments) {
-        if (seg.complete) continue
-        const effectiveStart = seg.startTime + seg.delay
-        if (elapsed < effectiveStart) {
-          allDone = false
-          continue
+      // A single update may span several repeat cycles (e.g. on a hitch); consume
+      // as many as the carried elapsed time allows instead of one per call.
+      while (running && !complete) {
+        let allDone = true
+        for (const seg of segments) {
+          if (seg.complete) continue
+          const effectiveStart = seg.startTime + seg.delay
+          if (elapsed < effectiveStart) {
+            allDone = false
+            continue
+          }
+          if (!seg.started) {
+            seg.started = true
+            const reducedMotion = !opts?.ignoreReducedMotion && isReducedMotionPreferred()
+            seg.handle = tween(
+              seg.entry.from,
+              seg.entry.to,
+              reducedMotion ? 0 : seg.entry.duration,
+              seg.entry.ease ?? Ease.linear,
+              seg.entry.onUpdate,
+              () => {
+                seg.complete = true
+                seg.entry.onComplete?.()
+              },
+              { ignoreReducedMotion: true }, // timeline already collapsed duration
+            )
+            // Apply time already elapsed past the start
+            const overflow = elapsed - effectiveStart
+            if (overflow > 0) seg.handle.update(overflow)
+          } else if (seg.handle) {
+            seg.handle.update(dt)
+          }
+          if (!seg.complete) allDone = false
         }
-        if (!seg.started) {
-          seg.started = true
-          const reducedMotion = !opts?.ignoreReducedMotion && isReducedMotionPreferred()
-          seg.handle = tween(
-            seg.entry.from,
-            seg.entry.to,
-            reducedMotion ? 0 : seg.entry.duration,
-            seg.entry.ease ?? Ease.linear,
-            seg.entry.onUpdate,
-            () => {
-              seg.complete = true
-              seg.entry.onComplete?.()
-            },
-            { ignoreReducedMotion: true }, // timeline already collapsed duration
-          )
-          // Apply time already elapsed past the start
-          const overflow = elapsed - effectiveStart
-          if (overflow > 0) seg.handle.update(overflow)
-        } else if (seg.handle) {
-          seg.handle.update(dt)
-        }
-        if (!seg.complete) allDone = false
-      }
 
-      if (allDone && segments.length > 0) {
+        if (!allDone) break
+        if (segments.length === 0) {
+          complete = true
+          running = false
+          opts?.onComplete?.()
+          break
+        }
         if (repeatsDone < maxRepeats) {
           repeatsDone++
           // Carry the overshoot past the end into the next cycle, so a loop keeps its real period
           elapsed -= computeTotalDuration()
           resetSegments()
+          // loop to process the next cycle with the carried elapsed time
         } else {
           complete = true
           running = false
           opts?.onComplete?.()
+          break
         }
       }
     },
