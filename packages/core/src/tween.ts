@@ -200,6 +200,16 @@ export function tween(
 
       elapsed += dt
 
+      // Zero-duration tweens (including reduced-motion-collapsed ones) cannot
+      // repeat meaningfully; finish in a single pass instead of looping forever.
+      if (duration <= 0) {
+        const end = forward ? to : from
+        onUpdate(end)
+        complete = true
+        onComplete?.()
+        return
+      }
+
       while (elapsed >= duration && !complete) {
         // Completed one pass
         const end = forward ? to : from
