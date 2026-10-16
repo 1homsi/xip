@@ -41,7 +41,7 @@ describe('SpriteLayer depth sort', () => {
     expect(order(l)).toEqual(reference(l))
   })
 
-  it('keeps incremental NaN-key ordering consistent with the full-sort fallback', () => {
+  it('places NaN keys last with and without incremental updates', () => {
     const l = make(3, (i) => i)
     expect(order(l)).toEqual([0, 1, 2])
     l.sortKey[2] = Number.NaN
@@ -49,10 +49,20 @@ describe('SpriteLayer depth sort', () => {
     expect(order(l)).toEqual(reference(l))
 
     const key2 = l.enableSortKey2()
-    ;[2, 1, 0].forEach((value, i) => (key2[i] = value))
+    ;[2, 0, 3].forEach((value, i) => (key2[i] = value))
+    l.sortKey[0] = Number.NaN
+    l.sortKey[1] = 1
+    l.sortKey[2] = 2
+    l.touchRange(0, l.count - 1)
+    expect(order(l)).toEqual([1, 2, 0])
+
+    l.sortKey[2] = Number.NaN
+    l.touchRange(2)
+    expect(order(l)).toEqual([1, 0, 2])
+
     l.sortKey.fill(Number.NaN, 0, l.count)
     l.touchRange(0, l.count - 1)
-    expect(order(l)).toEqual([2, 1, 0])
+    expect(order(l)).toEqual([1, 0, 2])
   })
 
   it('leaves hidden sprites out of the order and puts them back sorted', () => {

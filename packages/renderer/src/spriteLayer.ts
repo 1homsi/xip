@@ -703,15 +703,23 @@ export class SpriteLayer {
     return order
   }
 
-  /** Compare slots with the same NaN fallback as the full-sort path. */
+  /** Compare slots lexicographically, placing NaN keys after finite keys. */
   private compareOrder(a: number, b: number, K: Float64Array, K2: Float64Array | null): number {
-    const d = K[a] - K[b]
-    if (d !== 0 && d === d) return d
+    const primary = this.compareKey(K[a], K[b])
+    if (primary !== 0) return primary
     if (K2 !== null) {
-      const e = K2[a] - K2[b]
-      if (e !== 0 && e === e) return e
+      const secondary = this.compareKey(K2[a], K2[b])
+      if (secondary !== 0) return secondary
     }
     return a - b
+  }
+
+  /** Compare number keys with a consistent NaN placement for sorting. */
+  private compareKey(a: number, b: number): number {
+    const aNaN = a !== a
+    const bNaN = b !== b
+    if (aNaN || bNaN) return aNaN === bNaN ? 0 : aNaN ? 1 : -1
+    return a < b ? -1 : a > b ? 1 : 0
   }
 
   private fullSort(order: Int32Array, m: number, K: Float64Array, K2: Float64Array | null): void {
