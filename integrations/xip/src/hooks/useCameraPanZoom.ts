@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Camera2DComponent } from '@xip/renderer'
+import { canvasPoint } from '@xip/input'
 import { useGame } from './useGame'
 
 export interface CameraPanZoomOptions {
@@ -74,10 +75,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       const id = engine.ecs.queryOne('Camera2D')
       return id === undefined ? undefined : engine.ecs.getComponent<Camera2DComponent>(id, 'Camera2D')
     }
-    const local = (e: { clientX: number; clientY: number }) => {
-      const r = canvas.getBoundingClientRect()
-      return { x: e.clientX - r.left, y: e.clientY - r.top }
-    }
+    const local = (e: { clientX: number; clientY: number }) => canvasPoint(canvas, e.clientX, e.clientY)
     const size = () => ({ w: canvas.clientWidth || canvas.width, h: canvas.clientHeight || canvas.height })
     const clampZoom = (z: number) => Math.min(opts.current.maxZoom ?? 4, Math.max(opts.current.minZoom ?? 0.05, z))
 

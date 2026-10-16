@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import type { ECSWorld, EntityId, TransformComponent } from '@xip/core'
 import type { Camera2DComponent, SpriteComponent } from '@xip/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@xip/physics'
+import { canvasPoint } from '@xip/input'
 import { EngineContext, EntityContext, type EngineState } from '../context'
 
 export interface HoverableOptions {
@@ -66,12 +67,10 @@ export function useHoverable(options?: HoverableOptions): HoverableControls {
     const onMove = (e: PointerEvent) => {
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       if (!t) return
-      const rect = canvas.getBoundingClientRect()
       // Pointer in CSS pixels relative to canvas top-left
-      const cssX = e.clientX - rect.left
-      const cssY = e.clientY - rect.top
+      const css = canvasPoint(canvas, e.clientX, e.clientY)
       // Convert to world using camera
-      const world = screenToWorld(engine, cssX, cssY)
+      const world = screenToWorld(engine, css.x, css.y)
       if (!world) return
       const custom = optsRef.current?.bounds
       const bounds = custom

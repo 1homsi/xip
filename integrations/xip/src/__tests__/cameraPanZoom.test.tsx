@@ -239,4 +239,18 @@ describe('useCameraPanZoom', () => {
     const b = setup({ touchAction: 'pan-y' })
     expect(b.canvas.style.touchAction).toBe('pan-y')
   })
+
+  it('drag pans by layout pixels when the canvas is scaled by a CSS transform', () => {
+    const { cam, canvas, ptr } = setup({ inertia: false })
+    // 800x600 layout canvas drawn at half size, as <Game scale="contain"> does
+    Object.defineProperty(canvas, 'offsetWidth', { value: 800 })
+    Object.defineProperty(canvas, 'offsetHeight', { value: 600 })
+    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 300 }) as DOMRect
+    ptr('pointerdown', 100, 100)
+    ptr('pointermove', 140, 120)
+    ptr('pointerup', 140, 120)
+    // 40 screen px is 80 layout px at zoom 1
+    expect(cam.x).toBeCloseTo(-80)
+    expect(cam.y).toBeCloseTo(-40)
+  })
 })

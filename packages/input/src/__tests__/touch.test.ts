@@ -177,6 +177,16 @@ describe('TouchInput', () => {
       expect(points[0].x).toBe(150) // 250 - 100
       expect(points[0].y).toBe(100) // 150 - 50
     })
+
+    it('maps touches through a scaled element to layout pixels', () => {
+      // 800x600 layout box drawn at half size at (10, 20), as <Game scale="contain"> does
+      const scaledEl = createMockElement({ left: 10, top: 20, width: 400, height: 300 })
+      Object.assign(scaledEl, { offsetWidth: 800, offsetHeight: 600 })
+      touch.attach(scaledEl as unknown as HTMLElement)
+      scaledEl.dispatch('touchstart', createTouchEvent([{ identifier: 0, clientX: 210, clientY: 170 }]))
+      expect(touch.touches[0].x).toBe(400)
+      expect(touch.touches[0].y).toBe(300)
+    })
   })
 
   describe('preventDefault option', () => {

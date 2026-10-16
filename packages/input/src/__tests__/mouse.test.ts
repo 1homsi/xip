@@ -189,4 +189,30 @@ describe('Mouse', () => {
       expect(() => m.detach()).not.toThrow()
     })
   })
+
+  describe('scaled target', () => {
+    it('reports layout pixels when the target is scaled by a CSS transform', () => {
+      const m = new Mouse()
+      const el = document.createElement('div')
+      // 800x600 layout box drawn at half size at (10, 20), as <Game scale="contain"> does
+      el.getBoundingClientRect = () =>
+        ({
+          left: 10,
+          top: 20,
+          width: 400,
+          height: 300,
+          right: 410,
+          bottom: 320,
+          x: 10,
+          y: 20,
+          toJSON: () => {},
+        }) as DOMRect
+      Object.defineProperty(el, 'offsetWidth', { value: 800 })
+      Object.defineProperty(el, 'offsetHeight', { value: 600 })
+      m.attach(el)
+      fireMouseMove(el, 210, 170)
+      expect(m.x).toBe(400)
+      expect(m.y).toBe(300)
+    })
+  })
 })

@@ -1,3 +1,5 @@
+import { canvasPoint } from './canvasPoint'
+
 export interface MouseState {
   x: number
   y: number
@@ -18,9 +20,7 @@ export class Mouse {
 
   private onMouseMove = (e: MouseEvent): void => {
     if (!this.target) return
-    const rect = this.target.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const { x, y } = canvasPoint(this.target, e.clientX, e.clientY)
     // Several mousemoves arrive per frame: dx/dy are the sum since the last flush(), x/y the latest position.
     this.dx += x - this.x
     this.dy += y - this.y

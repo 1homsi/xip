@@ -129,4 +129,28 @@ describe('useHoverable', () => {
     move(engine, 15, 0)
     expect(hovered).toBe(false)
   })
+
+  it('hit-tests in layout pixels when the canvas is scaled by a CSS transform', () => {
+    const engine = makeEngine()
+    // 200x100 layout canvas drawn at half size, as <Game scale="contain"> does
+    Object.defineProperty(engine.canvas, 'offsetWidth', { value: 200 })
+    Object.defineProperty(engine.canvas, 'offsetHeight', { value: 100 })
+    engine.canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 50 }) as DOMRect
+    const id = entity(engine, {})
+    let hovered = false
+    function Card() {
+      hovered = useHoverable({ entityId: id }).isHovered
+      return null
+    }
+    render(
+      <EngineContext.Provider value={engine}>
+        <Card />
+      </EngineContext.Provider>,
+    )
+    // layout (100, 50) is the world origin; on screen that point is client (50, 25)
+    act(() => {
+      engine.canvas.dispatchEvent(new PointerEvent('pointermove', { clientX: 50, clientY: 25 }))
+    })
+    expect(hovered).toBe(true)
+  })
 })
