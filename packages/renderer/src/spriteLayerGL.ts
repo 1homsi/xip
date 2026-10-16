@@ -473,17 +473,21 @@ export class SpriteLayerRenderer {
           orderKept = R.orderVersion === layer.orderVersion
           R.orderVersion = layer.orderVersion
         }
-        const incremental =
+        const sparse =
           !dirtyAll &&
           sameView &&
           orderKept &&
           R.count === count &&
           R.segCount >= 0 &&
           dHi >= 0 &&
-          dHi - dLo < count >> 3 &&
-          this.gatherRange(layer, R, na, usePivots, perSprite, swayAmp, dLo, dHi)
+          dHi - dLo < count >> 3
+        const incremental = sparse && this.gatherRange(layer, R, na, usePivots, perSprite, swayAmp, dLo, dHi)
         if (!incremental) {
-          if (R.count === count && !dirtyAll && sameView && dHi >= 0 && dHi - dLo < count >> 3 && !layer.sortByKey)
+          // a gatherRange that gave up may already have repacked slots in place: re-upload them all
+          if (
+            sparse ||
+            (R.count === count && !dirtyAll && sameView && dHi >= 0 && dHi - dLo < count >> 3 && !layer.sortByKey)
+          )
             R.uploadAll = true
           this.gather(layer, R, na, usePivots, perSprite, swayAmp, dirtyAll, dLo, dHi, anyDirty)
           // Nearly everything changed, repeatedly: the compare and bookkeeping cannot pay off.
@@ -562,9 +566,11 @@ export class SpriteLayerRenderer {
 
   private markRun(R: Retained, n: number): void {
     const runs = R.runs
-    if (runs.length > 0 && n >= runs[runs.length - 2] && n <= R.runEnd + 8) runs[runs.length - 1] = n + 1
-    else runs.push(n, n + 1)
-    R.runEnd = n + 1
+    // sorted layers visit positions out of order: never shrink a run that already reaches past `n`
+    if (runs.length > 0 && n >= runs[runs.length - 2] && n <= R.runEnd + 8) {
+      if (n + 1 > runs[runs.length - 1]) runs[runs.length - 1] = n + 1
+    } else runs.push(n, n + 1)
+    R.runEnd = runs[runs.length - 1]
   }
 
   /** Write sprite `i`'s instance at position `n`; false (and valid = 2) when it cannot be drawn. */

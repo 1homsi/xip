@@ -134,6 +134,33 @@ describe('retained SpriteLayer instances', () => {
     expect(r.draws[10 * F]).toBe(11)
   })
 
+  it('uploads every repacked sprite when touched sorted slots land at descending packed positions', () => {
+    const { rs, run } = setup()
+    const l = make({ sortByKey: true })
+    for (let i = 0; i < 400; i++) {
+      const slot = l.add(-30 + i * 0.01, 5, 8, 8)
+      l.sortKey[slot] = 100 + i
+    }
+    // slots 100..102 are drawn first, in the order 100, 102, 101
+    l.sortKey[100] = 10
+    l.sortKey[101] = 15
+    l.sortKey[102] = 12
+    rs.addSpriteLayer(l)
+    run()
+    l.x[100] = 51
+    l.x[101] = 52
+    l.x[102] = 53
+    l.touchRange(100, 102)
+    const r = run()
+    const order = Array.from(l.drawOrder().subarray(0, l.orderCount))
+    for (const [slot, x] of [
+      [100, 51],
+      [101, 52],
+      [102, 53],
+    ])
+      expect(r.draws[order.indexOf(slot) * F]).toBe(x)
+  })
+
   it('finds the touched slot draw segment efficiently across interleaved atlases', () => {
     const { rs, run } = setup()
     const atlas = () => ({ image: img(64), frameWidth: 16, frameHeight: 16 })

@@ -285,10 +285,11 @@ share one layer.
 Depth sort (`sortByKey`): `sortKey` is a Float64Array (depths 0.0001 apart at y = 4000 stay
 distinct); sprites with equal keys break ties on an optional second key (`layer.enableSortKey2()`,
 then `sortKey2[i]`), then on slot order. Hidden sprites (`SPRITE_HIDDEN`) take no part in the sort.
-The order is updated incrementally from the previous frame whatever changed in between (keys
-drifting, `clear()` + `add()` rebuilds in a similar order, swap-removes, show/hide): near-linear when
-mostly kept, with an automatic fallback to a full sort when it is not. About 0.13 ms CPU per frame for
-3,000 moving, re-sorted sprites.
+The order is updated incrementally from the previous frame (keys drifting, `clear()` + `add()`
+rebuilds in a similar order, swap-removes, show/hide): near-linear when mostly kept, with an automatic
+fallback to a full sort when it is not. It only looks at slots reported with `touch()` / `touchRange()`
+(or added, removed or cleared), so call one after writing `sortKey`, `sortKey2` or the hidden flag.
+About 0.13 ms CPU per frame for 3,000 moving, re-sorted sprites.
 
 Picking (`pick` walks the draw order from the top, rotation is ignored, flips are honoured):
 
