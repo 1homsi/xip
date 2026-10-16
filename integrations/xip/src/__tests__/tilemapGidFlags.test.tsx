@@ -69,6 +69,17 @@ describe('<Tilemap> Tiled GID flag bits', () => {
     expect(sprite.flipY).toBe(true)
   })
 
+  it('a hex-rotated tile uses the frame of its tile id', async () => {
+    // Bit 28 is Tiled's hex 120° rotation flag; it must not leak into the tile id.
+    stubMap(mapWith({ name: 'ground', type: 'tilelayer', data: [0x10000000 | 2, 0] }))
+    const g = await mountGame(<Tilemap src="/map.json" />)
+    await flush()
+    await flush()
+    const [eid] = g.engine.ecs.query('Sprite')
+    const sprite = g.engine.ecs.getComponent<SpriteComponent>(eid, 'Sprite')!
+    expect(sprite.frame).toMatchObject({ sx: 16, sy: 0 })
+  })
+
   it('a flipped solid tile still gets a collider', async () => {
     stubMap(
       mapWith({

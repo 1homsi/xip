@@ -72,10 +72,11 @@ interface TiledMap {
 
 // ─── Animated tile state ──────────────────────────────────────────────────────
 
-// Tiled packs flip and rotation flags into the top three bits of each GID.
+// Tiled packs flip and rotation flags into the top four bits of each GID:
+// horizontal, vertical, diagonal and hex 120° rotation.
 const GID_FLIP_H = 0x80000000
 const GID_FLIP_V = 0x40000000
-const GID_FLAG_MASK = 0x1fffffff
+const GID_FLAG_MASK = 0x0fffffff
 
 interface AnimatedTileState {
   frames: number[]
