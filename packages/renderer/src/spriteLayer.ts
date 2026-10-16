@@ -1,6 +1,7 @@
 import type { Sampling } from './textureFilter'
 import type { LayerBlendMode } from './blendModes'
 import { registerSpriteLayerRenderer } from './layerRegistry'
+import { radixSortOrder } from './radixSort'
 import { SpriteLayerRenderer } from './spriteLayerGL'
 import { SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
 import { frameRect, opaqueBounds, readAtlasMask, type AtlasMask, type FrameHit, type PickSource } from './spritePick'
@@ -250,6 +251,7 @@ export class SpriteLayer {
   private _blend: LayerBlendMode
   private _order = new Int32Array(0)
   private _inOrder = new Uint8Array(0)
+  private _scratch = new Int32Array(0)
   private _orderCount = 0
   /** Sprites in the last {@link drawOrder} (visible ones only when `sortByKey`). */
   orderCount = 0
@@ -619,7 +621,7 @@ export class SpriteLayer {
         j--
         if (--budget < 0) {
           order[j + 1] = v
-          this.fullSort(order, m, K, K2)
+          this.fullSort(order, m, K, K2, n)
           return order
         }
       }
@@ -638,7 +640,16 @@ export class SpriteLayer {
     return a > v
   }
 
-  private fullSort(order: Int32Array, m: number, K: Float64Array, K2: Float64Array | null): void {
+  /**
+   * Full sort of the `m` visible slots (`_inOrder` marks them, `n` = count). A radix sort
+   * over the seeded slot order keeps the slot tie-break; the comparator covers NaN keys.
+   */
+  private fullSort(order: Int32Array, m: number, K: Float64Array, K2: Float64Array | null, n: number): void {
+    const inOrder = this._inOrder
+    let j = 0
+    for (let i = 0; i < n; i++) if (inOrder[i] === 1) order[j++] = i
+    if (this._scratch.length < m) this._scratch = new Int32Array(order.length)
+    if (radixSortOrder(order, this._scratch, m, K, K2)) return
     order.subarray(0, m).sort((a, b) => {
       const d = K[a] - K[b]
       if (d !== 0 && d === d) return d
