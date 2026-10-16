@@ -209,3 +209,19 @@ describe('AssetManager audio unlock', () => {
     expect(c.resume).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('AssetManager.loadAudio in flight', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('shares one fetch and decode between concurrent requests for the same file', async () => {
+    const { ctx } = installAudioMocks()
+    const assets = new AssetManager()
+    const [a, b] = await Promise.all([assets.loadAudio('/a.ogg'), assets.loadAudio('/a.ogg')])
+    expect(b).toBe(a)
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1)
+    expect(ctx.decodeAudioData).toHaveBeenCalledTimes(1)
+    expect(assets.getProgress()).toMatchObject({ loaded: 1, total: 1 })
+  })
+})

@@ -141,6 +141,7 @@ export class AssetManager {
     // Keep settled promises around only while in flight so failures can be
     // retried; successful buffers are served from the audio cache above.
     void promise.catch(() => {})
+    this.audioPromises.set(resolved, promise)
     return promise
   }
 
