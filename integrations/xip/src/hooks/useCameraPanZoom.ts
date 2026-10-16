@@ -169,7 +169,9 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       changed()
     }
 
-    const onUp = (e: PointerEvent) => {
+    // A cancelled pointer (the browser took over the touch: scroll, system gesture, palm rejection) ends
+    // the gesture without a tap and without a fling: nothing the user did was meant as a click.
+    const end = (e: PointerEvent, cancelled: boolean) => {
       const p = ptrs.get(e.pointerId)
       if (!p) return
       ptrs.delete(e.pointerId)
@@ -185,7 +187,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       }
       if (ptrs.size > 0) return
       const c = cam()
-      if (!dragging && c && opts.current.onTap) {
+      if (!cancelled && !dragging && c && opts.current.onTap) {
         const { w, h } = size()
         opts.current.onTap({
           screenX: p.x,
@@ -196,7 +198,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
         })
       }
       const idle = performance.now() - lastMove > 80
-      if (dragging && c && opts.current.inertia !== false && !idle && Math.hypot(vx, vy) > 20) {
+      if (!cancelled && dragging && c && opts.current.inertia !== false && !idle && Math.hypot(vx, vy) > 20) {
         let last = performance.now()
         const step = () => {
           const now = performance.now()
@@ -214,6 +216,8 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       }
       dragging = false
     }
+    const onUp = (e: PointerEvent) => end(e, false)
+    const onCancel = (e: PointerEvent) => end(e, true)
 
     const onWheel = (e: WheelEvent) => {
       if (opts.current.enabled === false) return
@@ -240,7 +244,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
-    canvas.addEventListener('pointercancel', onUp)
+    canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       stopGlide()
@@ -250,7 +254,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('wheel', onWheel)
     }
   }, [engine])

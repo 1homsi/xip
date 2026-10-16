@@ -13,6 +13,8 @@ import type { SnapControls } from './useSnap'
 
 interface ActiveDrag {
   entityId: EntityId
+  /** The pointer that owns this drag (a cancel of any other pointer is not ours). */
+  pointerId: number
   tag: string | null
   pointerX: number
   pointerY: number
@@ -67,6 +69,11 @@ export interface DraggableOptions {
   onDrag?: (info: { entityId: EntityId; x: number; y: number }) => void
   /** Called when the drag ends (pointerup). */
   onDragEnd?: (info: { entityId: EntityId; x: number; y: number; droppedOn: EntityId | null }) => void
+  /**
+   * Called instead of `onDragEnd` when the browser cancels the pointer mid-drag (it took over the touch
+   * for a scroll or system gesture). The entity is put back where the drag started and nothing is dropped.
+   */
+  onDragCancel?: (info: { entityId: EntityId; x: number; y: number }) => void
   /** Disable dragging. */
   disabled?: boolean
 }
@@ -143,6 +150,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       startWorldY = world.y
       setActiveDrag(engine, {
         entityId: entityId as EntityId,
+        pointerId: e.pointerId,
         tag: optsRef.current?.tag ?? null,
         pointerX: e.clientX,
         pointerY: e.clientY,
@@ -189,6 +197,21 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       engine.loop.markDirty()
     }
 
+    const onPointerCancel = (e: PointerEvent) => {
+      if (!dragging || e.pointerId !== pointerId) return
+      dragging = false
+      const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
+      if (t) {
+        t.x = startEntityX
+        t.y = startEntityY
+      }
+      setActiveDrag(engine, null)
+      setIsDragging(false)
+      setPosition({ x: startEntityX, y: startEntityY })
+      optsRef.current?.onDragCancel?.({ entityId: entityId as EntityId, x: startEntityX, y: startEntityY })
+      engine.loop.markDirty()
+    }
+
     const onPointerUp = (e: PointerEvent) => {
       if (!dragging || e.pointerId !== pointerId) return
       dragging = false
@@ -211,12 +234,12 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
     canvas.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
-    window.addEventListener('pointercancel', onPointerUp)
+    window.addEventListener('pointercancel', onPointerCancel)
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
-      window.removeEventListener('pointercancel', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerCancel)
     }
   }, [engine, entityId, options?.disabled])
 
@@ -284,6 +307,7 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
   useEffect(() => {
     if (!engine || entityId === null || entityId === undefined || options?.disabled) return
     let currentlyOver = false
+    let hoveredId: EntityId | null = null
 
     const check = () => {
       const drag = getActiveDrag(engine)
@@ -311,6 +335,7 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
 
       if (inside && !currentlyOver) {
         currentlyOver = true
+        hoveredId = dragId
         setIsOver(true)
         setHoveredBy(dragId)
         optsRef.current?.onEnter?.({ droppedEntityId: dragId })
@@ -336,13 +361,24 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
       setHoveredBy(null)
       optsRef.current?.onDrop?.({ droppedEntityId: dragId, x: dragX, y: dragY })
     }
+    // A cancelled pointer drops nothing: leave the zone without onDrop.
+    const onCancel = (e: PointerEvent) => {
+      if (!currentlyOver) return
+      const owner = getActiveDrag(engine)
+      if (owner && owner.pointerId !== e.pointerId) return
+      const dragId = hoveredId ?? getActiveDrag(engine)?.entityId ?? null
+      currentlyOver = false
+      setIsOver(false)
+      setHoveredBy(null)
+      if (dragId !== null) optsRef.current?.onLeave?.({ droppedEntityId: dragId })
+    }
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
 
     return () => {
       unsubscribe()
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
     }
     // hoveredBy intentionally excluded — we want stable subscribe lifetime
     // eslint-disable-next-line react-hooks/exhaustive-deps
