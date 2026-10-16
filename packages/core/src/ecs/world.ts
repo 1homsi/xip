@@ -467,8 +467,8 @@ export class ECSWorld {
    *
    * `getComponent`/`hasComponent`/`removeComponent` accept the returned ID
    * wherever a type string is accepted — passing numbers skips the string
-   * hash entirely, which matters in per-entity loops. IDs are valid until
-   * `clear()`; re-fetch after clearing or restoring a world.
+   * hash entirely, which matters in per-entity loops. IDs stay valid for the
+   * life of the world, including across `clear()` and `restoreSnapshot()`.
    */
   typeId(type: string): EntityTypeId {
     return this.internType(type)
@@ -1010,12 +1010,16 @@ export class ECSWorld {
   }
 
   clear(): void {
-    this.typeIds.clear()
-    this.columns.length = 0
-    this._memoKey.fill(undefined)
-    this._memoCol.fill(undefined)
-    this.slotOfId = new Int32Array(1024).fill(-1)
-    this.idOfSlot = new Int32Array(1024).fill(-1)
+    // Keep the interned type table and the column objects: callers cache
+    // numeric type IDs (`typeId`) for the world's lifetime, so a reset must
+    // not renumber them. Only the contents are dropped.
+    for (const col of this.columns) {
+      col.dense.length = 0
+      col.ownerSlot.length = 0
+      col.sparse.fill(-1)
+    }
+    this.slotOfId.fill(-1)
+    this.idOfSlot.fill(-1)
     this.liveCount = 0
     this.archetypes.clear()
     this.typeIndex.clear()

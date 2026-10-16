@@ -6,6 +6,8 @@ import type { RigidBodyComponent } from '../components/rigidbody'
 import { createRigidBody } from '../components/rigidbody'
 import type { BoxColliderComponent } from '../components/boxCollider'
 import { createBoxCollider } from '../components/boxCollider'
+import { createCircleCollider } from '../components/circleCollider'
+import { createTriMeshCollider } from '../components/triMeshCollider'
 import { PhysicsSystem } from '../physicsSystem'
 
 // Fixed timestep the physics system uses internally
@@ -1225,5 +1227,42 @@ describe('PhysicsSystem — Stage 1.7', () => {
       // Angular velocity should be clamped to maxAngularVelocity
       expect(Math.abs(rb.angularVelocity)).toBeLessThanOrEqual(5 + 0.01)
     })
+  })
+})
+
+describe('PhysicsSystem after a world restore', () => {
+  it('keeps reading the right columns after restoreSnapshot (undo, rollback)', () => {
+    const world = new ECSWorld()
+    const physics = new PhysicsSystem(500, new EventBus())
+    const floor = [
+      { x: -200, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 20 },
+      { x: -200, y: 20 },
+    ]
+    const tris = [0, 1, 2, 0, 2, 3]
+    const mesh = world.createEntity()
+    world.addComponent(mesh, createTransform(0, 200))
+    world.addComponent(mesh, createRigidBody({ isStatic: true }))
+    world.addComponent(mesh, createTriMeshCollider(floor, tris))
+    // Physics interns its collider types on the first step.
+    physics.update(world, FIXED_DT)
+
+    world.restoreSnapshot(new ECSWorld().getSnapshot())
+
+    // Rebuild the level in a different order than before the restore.
+    const m2 = world.createEntity()
+    world.addComponent(m2, createTransform(0, 200))
+    world.addComponent(m2, createRigidBody({ isStatic: true }))
+    world.addComponent(m2, createTriMeshCollider(floor, tris))
+    const circle = world.createEntity()
+    world.addComponent(circle, createTransform(0, 50))
+    world.addComponent(circle, createRigidBody())
+    world.addComponent(circle, createCircleCollider(10))
+    for (let i = 0; i < 240; i++) physics.update(world, FIXED_DT)
+
+    const t = world.getComponent<TransformComponent>(circle, 'Transform')!
+    expect(t.y).toBeGreaterThan(180)
+    expect(t.y).toBeLessThan(220)
   })
 })
