@@ -272,6 +272,24 @@ describe('ECSWorld', () => {
       // Matches destroyEntity(), which also notifies once the entity is gone.
       expect(liveAtNotify).toBe(false)
     })
+
+    it('does not reuse dropped ids while restore listeners are running', () => {
+      const snap = world.getSnapshot()
+      const dropped = [world.createEntity(), world.createEntity(), world.createEntity()]
+      const liveAtNotify: boolean[] = []
+      let spawned: number | undefined
+      world.onDestroyEntity((id) => {
+        liveAtNotify.push(world.hasEntity(id))
+        if (spawned === undefined) spawned = world.createEntity()
+      })
+
+      world.restoreSnapshot(snap)
+
+      expect(liveAtNotify).toEqual([false, false, false])
+      expect(spawned).toBeDefined()
+      expect(dropped).not.toContain(spawned)
+      expect(world.hasEntity(spawned!)).toBe(true)
+    })
   })
 
   describe('deterministic RNG', () => {

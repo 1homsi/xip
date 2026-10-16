@@ -1027,6 +1027,10 @@ export class ECSWorld {
   /** Report every id in `ids` as destroyed to the subscribers. */
   private notifyDestroyed(ids: EntityId[]): void {
     if (this.destroyListeners.size === 0) return
+    // A listener may create an entity. Keep every removed id reserved until
+    // the whole batch has been reported, so that later callbacks cannot see a
+    // destroyed id become live again during the same notification pass.
+    for (const id of ids) this.nextId = Math.max(this.nextId, id + 1)
     for (const id of ids) {
       // Fire subscribers — copy to avoid mutation-during-iteration if one unsubscribes.
       for (const cb of Array.from(this.destroyListeners)) cb(id)
