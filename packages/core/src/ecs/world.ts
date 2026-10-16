@@ -1031,8 +1031,11 @@ export class ECSWorld {
     this.dirtyTypes.clear()
     this.dirtyAll = false
     this.nextId = 0
+    // `_deterministic` is world configuration, not state, so it is deliberately
+    // kept: a reset or a restore must not silently fall back to Math.random()
+    // (rollback and replay would diverge). The stream restarts from zero like
+    // the rest of the reset.
     this._rngState = 0
-    this._deterministic = false
   }
 
   get entityCount(): number {
