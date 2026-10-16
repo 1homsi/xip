@@ -213,6 +213,59 @@ describe('VirtualJoystick pointer events', () => {
     expect(useVirtualInput().axisY).toBe(0)
   })
 
+  it('lost pointer capture resets the joystick axis', () => {
+    const { container } = render(<VirtualJoystick />)
+    const base = container.firstElementChild as HTMLElement
+
+    act(() => {
+      base.dispatchEvent(makePointerEvent('pointerdown', { clientX: 100, clientY: 100 }))
+      base.dispatchEvent(makePointerEvent('pointermove', { clientX: 130, clientY: 100 }))
+    })
+    expect(useVirtualInput().axisX).toBeGreaterThan(0)
+
+    act(() => {
+      base.dispatchEvent(makePointerEvent('lostpointercapture', { pointerId: 1 }))
+    })
+
+    expect(useVirtualInput().axisX).toBe(0)
+    expect(useVirtualInput().axisY).toBe(0)
+  })
+
+  it('unmount releases a held axis and action button', () => {
+    const { container, unmount } = render(<VirtualJoystick actionButton actionName="jump" />)
+    const base = container.firstElementChild as HTMLElement
+    const button = container.lastElementChild as HTMLElement
+
+    act(() => {
+      base.dispatchEvent(makePointerEvent('pointerdown', { clientX: 100, clientY: 100 }))
+      base.dispatchEvent(makePointerEvent('pointermove', { clientX: 130, clientY: 100 }))
+      button.dispatchEvent(makePointerEvent('pointerdown', { pointerId: 7 }))
+    })
+    expect(useVirtualInput().axisX).toBeGreaterThan(0)
+    expect(useVirtualInput().button('jump')).toBe(true)
+
+    unmount()
+
+    expect(useVirtualInput().axisX).toBe(0)
+    expect(useVirtualInput().axisY).toBe(0)
+    expect(useVirtualInput().button('jump')).toBe(false)
+  })
+
+  it('lost pointer capture releases the action button', () => {
+    const { container } = render(<VirtualJoystick actionButton actionName="jump" />)
+    const button = container.lastElementChild as HTMLElement
+
+    act(() => {
+      button.dispatchEvent(makePointerEvent('pointerdown', { pointerId: 7 }))
+    })
+    expect(useVirtualInput().button('jump')).toBe(true)
+
+    act(() => {
+      button.dispatchEvent(makePointerEvent('lostpointercapture', { pointerId: 7 }))
+    })
+    expect(useVirtualInput().button('jump')).toBe(false)
+  })
+
   it('action button sets virtual button on pointerdown', () => {
     const { container } = render(<VirtualJoystick actionButton actionName="jump" />)
     // The action button is the last div rendered (Fragment: joystick base + action button)

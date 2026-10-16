@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { setVirtualAxis, setVirtualButton } from '../hooks/useVirtualInput'
 
 export interface VirtualJoystickProps {
@@ -45,6 +45,7 @@ export function VirtualJoystick({
   const baseRef = useRef<HTMLDivElement>(null)
   const stickRef = useRef<HTMLDivElement>(null)
   const activePtr = useRef<number | null>(null)
+  const activeActionPtr = useRef<number | null>(null)
   const baseCenterRef = useRef({ x: 0, y: 0 })
 
   const radius = size / 2 - 16
@@ -78,6 +79,36 @@ export function VirtualJoystick({
     applyStickPosition(0, 0)
   }
 
+  const handleActionDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeActionPtr.current !== null) return
+    activeActionPtr.current = e.pointerId
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setVirtualButton(actionName, true)
+  }
+
+  const handleActionEnd = (e: React.PointerEvent) => {
+    if (e.pointerId !== activeActionPtr.current) return
+    activeActionPtr.current = null
+    setVirtualButton(actionName, false)
+  }
+
+  useEffect(
+    () => () => {
+      activePtr.current = null
+      setVirtualAxis(0, 0)
+      if (stickRef.current) stickRef.current.style.transform = 'translate(-50%, -50%)'
+    },
+    [],
+  )
+
+  useEffect(
+    () => () => {
+      activeActionPtr.current = null
+      setVirtualButton(actionName, false)
+    },
+    [actionButton, actionName],
+  )
+
   const updateFromPointer = (clientX: number, clientY: number) => {
     const dx = clientX - baseCenterRef.current.x
     const dy = clientY - baseCenterRef.current.y
@@ -110,6 +141,7 @@ export function VirtualJoystick({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onLostPointerCapture={handlePointerUp}
         style={{
           position: 'absolute',
           width: size,
@@ -146,12 +178,10 @@ export function VirtualJoystick({
       {/* Optional action button */}
       {actionButton && (
         <div
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId)
-            setVirtualButton(actionName, true)
-          }}
-          onPointerUp={() => setVirtualButton(actionName, false)}
-          onPointerCancel={() => setVirtualButton(actionName, false)}
+          onPointerDown={handleActionDown}
+          onPointerUp={handleActionEnd}
+          onPointerCancel={handleActionEnd}
+          onLostPointerCapture={handleActionEnd}
           style={{
             position: 'absolute',
             width: size * 0.55,
