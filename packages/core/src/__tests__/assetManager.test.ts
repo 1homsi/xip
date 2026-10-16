@@ -224,4 +224,16 @@ describe('AssetManager.loadAudio in flight', () => {
     expect(ctx.decodeAudioData).toHaveBeenCalledTimes(1)
     expect(assets.getProgress()).toMatchObject({ loaded: 1, total: 1 })
   })
+
+  it('retries a file whose fetch throws synchronously instead of caching the rejection', async () => {
+    installAudioMocks()
+    const fetchMock = vi.mocked(globalThis.fetch)
+    fetchMock.mockImplementationOnce(() => {
+      throw new TypeError('network down')
+    })
+    const assets = new AssetManager()
+    await expect(assets.loadAudio('/a.ogg')).rejects.toThrow('network down')
+    await expect(assets.loadAudio('/a.ogg')).resolves.toBeDefined()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })
