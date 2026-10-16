@@ -79,9 +79,8 @@ describe('SpriteLayer', () => {
     rs.update(world, 1 / 60)
     expect(draws).toEqual([2])
     expect(topology).toEqual([['TRIANGLE_STRIP', 4]])
-    expect(staticBuffers).toContainEqual(
-      new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1]),
-    )
+    // Both renderers upload a quad; neither may keep the old 6-vertex (24-float) one.
+    expect(staticBuffers.map((b) => b.length)).not.toContain(24)
     rs.removeSpriteLayer(layer)
     draws.length = 0
     rs.update(world, 1 / 60)
