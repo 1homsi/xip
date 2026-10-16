@@ -212,14 +212,17 @@ describe('ECSWorld', () => {
     })
 
     it('keeps type IDs stable, so a cached typeId still reads its column', () => {
-      world.typeId('Tag')
+      const old = world.createEntity()
+      world.addComponent(old, { type: 'Tag', tags: ['stale'] })
       const health = world.typeId('Health')
       world.clear()
-      // Health is the second type interned before the reset; it must keep that ID.
+      // Health is interned before the reset; it must keep that ID, and the old entity's Tag must be gone.
       const e = world.createEntity()
       world.addComponent(e, { type: 'Health', hp: 5 })
       expect(world.typeId('Health')).toBe(health)
       expect(world.getComponent<{ hp: number }>(e, health)?.hp).toBe(5)
+      expect(world.getComponent(e, 'Tag')).toBeUndefined()
+      expect(world.query('Tag')).toEqual([])
     })
   })
 

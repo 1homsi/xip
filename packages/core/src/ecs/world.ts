@@ -1012,7 +1012,8 @@ export class ECSWorld {
   clear(): void {
     // Keep the interned type table and the column objects: callers cache
     // numeric type IDs (`typeId`) for the world's lifetime, so a reset must
-    // not renumber them. Only the contents are dropped.
+    // not renumber them. Only the contents are dropped. Do not clear typeIds
+    // here, even though it looks like the obvious reset.
     for (const col of this.columns) {
       col.dense.length = 0
       col.ownerSlot.length = 0
