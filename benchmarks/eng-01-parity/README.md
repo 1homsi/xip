@@ -1,8 +1,13 @@
 # ENG-01 pixel parity harness
 
 This deterministic WebGL2 scene harness drives `captureFrame()` for crowd,
-overview, and text-heavy scenes. Run it from an app worktree that has Vite,
-React, and Playwright installed.
+overview, and text-heavy scenes. Each scene exercises every quad path this change
+converts: a sorted sprite layer (rotated sprites), a text layer, entity-batch
+`<Sprite>` quads (rotated and flipped, `zIndex={2}`) and SDF shape quads
+(`Circle`/`Line`/`Polygon`, `zIndex={3}`). The capture renders a fixed number of
+frames first and the scene is fully static, so the output is byte-identical across
+browser launches (verified: two base runs match each other). Run it from an app
+worktree that has Vite and React installed.
 
 From the app's `apps/web` directory, start the harness against either XIP
 checkout:

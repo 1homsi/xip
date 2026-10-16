@@ -22,6 +22,7 @@ export interface RecordedTexture {
 export interface RecordedDraw {
   kind: 'instanced' | 'arrays'
   mode: number
+  /** Vertices per instance for `instanced` draws; total vertices for `arrays` draws. */
   vertices: number
   /** Instance count for instanced draws, vertex count otherwise. */
   count: number
