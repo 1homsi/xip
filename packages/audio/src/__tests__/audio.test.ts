@@ -420,6 +420,51 @@ describe('Audio system', () => {
       expect(node.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.3, expect.any(Number))
     })
 
+    it('duck and setGroupVolumeFaded keep a muted group silent', async () => {
+      const { setGroupMute, duck, setGroupVolumeFaded, getGroupVolume } = await import('../useSound')
+      const { getGroupGainNode } = await import('../audioContext')
+
+      setGroupMute('ambience', true)
+      const node = getGroupGainNode('ambience') as unknown as ReturnType<typeof createMockGainNode>
+      node.gain.setValueAtTime.mockClear()
+      node.gain.linearRampToValueAtTime.mockClear()
+
+      duck('ambience', 0.3, 2)
+      setGroupVolumeFaded('ambience', 1, 1)
+
+      const scheduled = [
+        ...node.gain.setValueAtTime.mock.calls.map((c) => c[0]),
+        ...node.gain.linearRampToValueAtTime.mock.calls.map((c) => c[0]),
+      ]
+      expect(scheduled.length).toBeGreaterThan(0)
+      expect(scheduled.every((v) => v === 0)).toBe(true)
+      // the faded target is still remembered, so unmuting restores it
+      expect(getGroupVolume('ambience')).toBe(1)
+    })
+
+    it('muting or unmuting drops automation that was already scheduled on the group', async () => {
+      const { setGroupVolume, setGroupMute, duck } = await import('../useSound')
+      const { getGroupGainNode } = await import('../audioContext')
+
+      setGroupVolume('music', 0.8)
+      const node = getGroupGainNode('music') as unknown as ReturnType<typeof createMockGainNode>
+      duck('music', 0.3, 2) // scheduled while unmuted
+      node.gain.cancelScheduledValues.mockClear()
+
+      setGroupMute('music', false) // already unmuted: the duck keeps running
+      expect(node.gain.cancelScheduledValues).not.toHaveBeenCalled()
+
+      setGroupMute('music', true)
+      expect(node.gain.cancelScheduledValues).toHaveBeenCalledTimes(1)
+      expect(node.gain.value).toBe(0)
+
+      duck('music', 0.3, 2) // scheduled while muted
+      node.gain.cancelScheduledValues.mockClear()
+      setGroupMute('music', false)
+      expect(node.gain.cancelScheduledValues).toHaveBeenCalledTimes(1)
+      expect(node.gain.value).toBeCloseTo(0.8)
+    })
+
     it('stopGroup calls stop on all registered sources', async () => {
       const { useSound, stopGroup } = await import('../useSound')
 
