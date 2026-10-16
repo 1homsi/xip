@@ -152,10 +152,13 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
     ch.binaryType = 'arraybuffer'
 
     ch.addEventListener('open', () => {
+      // A second datachannel replaces this one; only the active channel drives link state.
+      if (channel !== ch) return
       notifyConnect()
     })
 
     ch.addEventListener('close', () => {
+      if (channel !== ch) return
       notifyDisconnect()
     })
 
