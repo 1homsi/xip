@@ -292,15 +292,16 @@ export function Tilemap({
           }
 
           if (collision || trigger) {
+            // Non-solid tiles never get a collider, in either the merged or the legacy path
+            const solidSet = solidTiles ? new Set(solidTiles) : null
+            const isSolid = (gid: number) => gid !== 0 && (!solidSet || solidSet.has(gid))
             if (mergeColliders) {
               // Build a 2D solid grid and merge into large rectangles
-              const solidSet = solidTiles ? new Set(solidTiles) : null
               const solidGrid: boolean[][] = []
               for (let row = 0; row < mapData.height; row++) {
                 solidGrid[row] = []
                 for (let col = 0; col < mapData.width; col++) {
-                  const gid = data[row * mapData.width + col]
-                  solidGrid[row][col] = gid !== 0 && (!solidSet || solidSet.has(gid))
+                  solidGrid[row][col] = isSolid(data[row * mapData.width + col])
                 }
               }
 
@@ -323,14 +324,13 @@ export function Tilemap({
                 let col = 0
                 while (col < mapData.width) {
                   const i = row * mapData.width + col
-                  const gid = data[i]
-                  if (gid === 0) {
+                  if (!isSolid(data[i])) {
                     col++
                     continue
                   }
 
                   let runLength = 1
-                  while (col + runLength < mapData.width && data[row * mapData.width + col + runLength] !== 0) {
+                  while (col + runLength < mapData.width && isSolid(data[row * mapData.width + col + runLength])) {
                     runLength++
                   }
 
