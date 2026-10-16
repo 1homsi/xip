@@ -141,6 +141,21 @@ describe('SpriteLayer', () => {
     expect([layer.x[0], layer.y[0], layer.w[0], layer.h[0]]).toEqual([0, 0, 0, 0])
   })
 
+  it("a SpriteLayer moved to another render system reads that system's dynamic canvases", () => {
+    const { rs: rs1 } = setup()
+    const c1 = rs1.createDynamicCanvas({ id: 'atlas', width: 16, height: 16 })
+    vi.restoreAllMocks()
+    const { rs: rs2 } = setup()
+    const c2 = rs2.createDynamicCanvas({ id: 'atlas', width: 16, height: 16 })
+    const layer = new SpriteLayer({ dynamicSrc: 'atlas', frameWidth: 16, frameHeight: 16 })
+    rs1.addSpriteLayer(layer)
+    rs2.addSpriteLayer(layer)
+    expect(layer.pixelSource!(layer.atlases[0])).toBe(c2.canvas)
+    expect(layer.pixelSource!(layer.atlases[0])).not.toBe(c1.canvas)
+    rs1.removeSpriteLayer(layer)
+    expect(layer.pixelSource!(layer.atlases[0])).toBe(c2.canvas)
+  })
+
   it('calls onChange for every mutation path, including atlas setters and touch()', () => {
     const layer = new SpriteLayer()
     const onChange = vi.fn()

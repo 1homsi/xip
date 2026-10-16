@@ -23,7 +23,7 @@ import {
 import { parseCSSColor } from './colorParser'
 import { createPostProcessStack, type PostProcessStack } from './postProcess'
 import { clampCameraToBounds } from './components/camera2d'
-import type { SpriteLayer, LayerAtlas, PickSource } from './spriteLayer'
+import type { SpriteLayer, LayerAtlas } from './spriteLayer'
 import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
 import {
@@ -1097,6 +1097,9 @@ export class RenderSystem implements System {
 
   // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
   private readonly _dynamicCanvases = new Map<string, DynamicCanvasEntry>()
+  /** Stable identity lets removal avoid clearing a newer render system's binding. */
+  private readonly _layerPixelSource: NonNullable<SpriteLayer['pixelSource']> = (atlas) =>
+    atlas.dynamicSrc != null ? this._dynamicCanvases.get(atlas.dynamicSrc)?.canvas : this.imageCache.get(atlas.src!)
   private _textureRevision = 0
   private _overlayRevision = 0
 
@@ -1306,18 +1309,16 @@ export class RenderSystem implements System {
   addSpriteLayer(layer: SpriteLayer): void {
     if (!this._spriteLayers.includes(layer)) this._spriteLayers.push(layer)
     // Alpha-tested / opaque-bounds picking reads the atlas pixels the renderer already holds.
-    layer.pixelSource ??= (atlas) =>
-      (atlas.dynamicSrc !== undefined
-        ? this._dynamicCanvases.get(atlas.dynamicSrc)?.canvas
-        : atlas.src !== undefined
-          ? this.imageCache.get(atlas.src)
-          : undefined) as PickSource | undefined
+    // Bound on every add: a layer moved to a new render system must read that system's canvases.
+    layer.pixelSource = this._layerPixelSource
     this._overlayRevision++
   }
 
   removeSpriteLayer(layer: SpriteLayer): void {
     const i = this._spriteLayers.indexOf(layer)
     if (i >= 0) this._spriteLayers.splice(i, 1)
+    // Unbind only our own resolver: the layer may already belong to a newer render system.
+    if (layer.pixelSource === this._layerPixelSource) layer.pixelSource = null
     this._spriteLayerRenderer?.release(layer)
     this._overlayRevision++
   }

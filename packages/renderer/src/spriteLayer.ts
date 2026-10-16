@@ -549,6 +549,8 @@ export class SpriteLayer {
     const a = this.atlases[i]
     if (!a) return
     a.imageVersion = (a.imageVersion ?? 0) + 1
+    // the cached alpha mask is keyed by the same canvas, so it would keep the old pixels
+    this._masks.delete(a)
     this._repack = true
     this.changed()
   }
