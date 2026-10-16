@@ -66,7 +66,9 @@ export function generateTriMeshCircleManifold(
   circleCy: number,
   circleR: number,
 ): { normalX: number; normalY: number; points: ContactPoint[] } | null {
-  const candidates = queryBVHCircle(bvh, circleCx, circleCy, circleR)
+  const localCircleX = circleCx - meshCx
+  const localCircleY = circleCy - meshCy
+  const candidates = queryBVHCircle(bvh, localCircleX, localCircleY, circleR)
   if (candidates.length === 0) return null
 
   let bestPen = 0
@@ -76,9 +78,9 @@ export function generateTriMeshCircleManifold(
 
   for (const idx of candidates) {
     const tri = bvh.triangles[idx]
-    const closest = closestPointOnTriangle(circleCx, circleCy, tri)
-    const dx = circleCx - closest.x
-    const dy = circleCy - closest.y
+    const closest = closestPointOnTriangle(localCircleX, localCircleY, tri)
+    const dx = localCircleX - closest.x
+    const dy = localCircleY - closest.y
     const distSq = dx * dx + dy * dy
 
     if (distSq >= circleR * circleR) continue
@@ -105,12 +107,12 @@ export function generateTriMeshCircleManifold(
       const contactOnCircleY = circleCy - ny * circleR
 
       bestContact = {
-        worldAx: closest.x,
-        worldAy: closest.y,
+        worldAx: closest.x + meshCx,
+        worldAy: closest.y + meshCy,
         worldBx: contactOnCircleX,
         worldBy: contactOnCircleY,
-        rAx: closest.x - meshCx,
-        rAy: closest.y - meshCy,
+        rAx: closest.x,
+        rAy: closest.y,
         rBx: contactOnCircleX - circleCx,
         rBy: contactOnCircleY - circleCy,
         penetration,
@@ -142,11 +144,13 @@ export function generateTriMeshBoxManifold(
   boxHw: number,
   boxHh: number,
 ): { normalX: number; normalY: number; points: ContactPoint[] } | null {
+  const localBoxCx = boxCx - meshCx
+  const localBoxCy = boxCy - meshCy
   const candidates = queryBVH(bvh, {
-    minX: boxCx - boxHw,
-    minY: boxCy - boxHh,
-    maxX: boxCx + boxHw,
-    maxY: boxCy + boxHh,
+    minX: localBoxCx - boxHw,
+    minY: localBoxCy - boxHh,
+    maxX: localBoxCx + boxHw,
+    maxY: localBoxCy + boxHh,
   })
   if (candidates.length === 0) return null
 
@@ -157,10 +161,10 @@ export function generateTriMeshBoxManifold(
 
   // Box corners
   const corners = [
-    { x: boxCx - boxHw, y: boxCy - boxHh },
-    { x: boxCx + boxHw, y: boxCy - boxHh },
-    { x: boxCx + boxHw, y: boxCy + boxHh },
-    { x: boxCx - boxHw, y: boxCy + boxHh },
+    { x: localBoxCx - boxHw, y: localBoxCy - boxHh },
+    { x: localBoxCx + boxHw, y: localBoxCy - boxHh },
+    { x: localBoxCx + boxHw, y: localBoxCy + boxHh },
+    { x: localBoxCx - boxHw, y: localBoxCy + boxHh },
   ]
 
   for (const idx of candidates) {
@@ -207,14 +211,14 @@ export function generateTriMeshBoxManifold(
         bestNx = bestEdgeNx
         bestNy = bestEdgeNy
         bestContact = {
-          worldAx: corner.x - bestEdgeNx * minDist,
-          worldAy: corner.y - bestEdgeNy * minDist,
-          worldBx: corner.x,
-          worldBy: corner.y,
-          rAx: corner.x - bestEdgeNx * minDist - meshCx,
-          rAy: corner.y - bestEdgeNy * minDist - meshCy,
-          rBx: corner.x - boxCx,
-          rBy: corner.y - boxCy,
+          worldAx: corner.x - bestEdgeNx * minDist + meshCx,
+          worldAy: corner.y - bestEdgeNy * minDist + meshCy,
+          worldBx: corner.x + meshCx,
+          worldBy: corner.y + meshCy,
+          rAx: corner.x - bestEdgeNx * minDist,
+          rAy: corner.y - bestEdgeNy * minDist,
+          rBx: corner.x - localBoxCx,
+          rBy: corner.y - localBoxCy,
           penetration: minDist,
           normalImpulse: 0,
           tangentImpulse: 0,
