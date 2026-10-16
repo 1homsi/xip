@@ -63,6 +63,19 @@ describe('entity batch buffer', () => {
     rs.update(world, 1 / 60)
     expect(sizes.filter((s) => s === ENTITY_BATCH_BYTES)).toHaveLength(1)
   })
+
+  it('is allocated again after a context restore, on the next entity draw', () => {
+    const { rs, world, sizes } = setup()
+    const e = world.createEntity()
+    world.addComponent(e, createTransform(10, 10))
+    world.addComponent(e, createSprite({ width: 8, height: 8 }))
+    rs.update(world, 1 / 60)
+    // The handler the 'webglcontextrestored' listener calls.
+    ;(rs as unknown as { onContextRestored: () => void }).onContextRestored()
+    expect(sizes.filter((s) => s === ENTITY_BATCH_BYTES)).toHaveLength(1)
+    rs.update(world, 1 / 60)
+    expect(sizes.filter((s) => s === ENTITY_BATCH_BYTES)).toHaveLength(2)
+  })
 })
 
 describe('text batch buffer', () => {
