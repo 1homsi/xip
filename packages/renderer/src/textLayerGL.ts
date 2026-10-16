@@ -73,7 +73,8 @@ export class TextLayerRenderer {
   private uZoom: WebGLUniformLocation | null = null
   private uSize: WebGLUniformLocation | null = null
   private uShake: WebGLUniformLocation | null = null
-  private readonly data = new Float32Array(MAX_BATCH * FLOATS)
+  // Grows to the glyph count of the frame (reserve); MAX_BATCH is the ceiling.
+  private data = new Float32Array(0)
   private readonly pageTex = new Map<AtlasPage, PageTex>()
   /** Set by the render system so atlas textures count in its stats. */
   sink: TextLayerStatsSink | null = null
@@ -91,6 +92,7 @@ export class TextLayerRenderer {
     gl.linkProgram(p)
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`[TextLayer] ${gl.getProgramInfoLog(p)}`)
     this.program = p
+    this.data = new Float32Array(0)
     this.uCam = gl.getUniformLocation(p, 'u_camPos')
     this.uZoom = gl.getUniformLocation(p, 'u_zoom')
     this.uSize = gl.getUniformLocation(p, 'u_canvasSize')
@@ -106,7 +108,7 @@ export class TextLayerRenderer {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0)
     this.buffer = gl.createBuffer()!
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
-    gl.bufferData(gl.ARRAY_BUFFER, this.data.byteLength, gl.DYNAMIC_DRAW)
+    gl.bufferData(gl.ARRAY_BUFFER, 0, gl.DYNAMIC_DRAW)
     let off = 0
     const attr = (loc: number, size: number) => {
       gl.enableVertexAttribArray(loc)
@@ -218,6 +220,9 @@ export class TextLayerRenderer {
     const tg = ((tint >>> 16) & 255) / 255
     const tb = ((tint >>> 8) & 255) / 255
     const ta = (tint & 255) / 255
+    let glyphs = 0
+    for (let i = 0; i < count; i++) glyphs += layer.layoutIfCached(i)?.n ?? 0
+    this.reserve(glyphs)
     const d = this.data
     const order = layer.sortByKey ? layer.drawOrder() : null
     for (let p = 0; p < atlas.pages.length; p++) {
@@ -300,6 +305,19 @@ export class TextLayerRenderer {
     const x = layer.x[i]
     const y = layer.y[i]
     return x + extent < l || x - extent > r || y + extent < t || y - extent > b
+  }
+
+  /** Grows the batch (power-of-two steps from 256 glyphs, at most MAX_BATCH) to hold `n` glyphs. */
+  private reserve(n: number): void {
+    const want = Math.min(n, MAX_BATCH)
+    if (this.data.length >= want * FLOATS) return
+    let cap = 256
+    while (cap < want) cap *= 2
+    cap = Math.min(cap, MAX_BATCH)
+    this.data = new Float32Array(cap * FLOATS)
+    const { gl } = this
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, this.data.byteLength, gl.DYNAMIC_DRAW)
   }
 
   private flush(n: number): void {

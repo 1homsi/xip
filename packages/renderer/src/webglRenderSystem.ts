@@ -858,8 +858,10 @@ export class RenderSystem implements System {
   private readonly gl: WebGL2RenderingContext
   private program!: WebGLProgram
   private quadVAO!: WebGLVertexArrayObject
-  private instanceBuffer!: WebGLBuffer
-  private readonly instanceData = new Float32Array(MAX_INSTANCES * FLOATS_PER_INSTANCE)
+  // The entity batch is allocated on first use (ensureInstanceBatch): an app that
+  // only draws SpriteLayers, text and tiles never pays for its 1.2 MB + GL buffer.
+  private instanceBuffer: WebGLBuffer | null = null
+  private instanceData: Float32Array | null = null
   private whiteTexture!: WebGLTexture
   private particleTextureSoft!: WebGLTexture
   private particleTextureCircle!: WebGLTexture
@@ -1797,28 +1799,10 @@ export class RenderSystem implements System {
     gl.enableVertexAttribArray(1)
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, qStride, 2 * 4) // a_uv
 
-    // Per-instance buffer
-    this.instanceBuffer = gl.createBuffer()!
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, this.instanceData.byteLength, gl.DYNAMIC_DRAW)
-
-    const iStride = FLOATS_PER_INSTANCE * 4
-    let byteOffset = 0
-    const addAttr = (loc: number, size: number) => {
-      gl.enableVertexAttribArray(loc)
-      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, iStride, byteOffset)
-      gl.vertexAttribDivisor(loc, 1)
-      byteOffset += size * 4
-    }
-    addAttr(2, 2) // i_pos
-    addAttr(3, 2) // i_size
-    addAttr(4, 1) // i_rot
-    addAttr(5, 2) // i_anchor
-    addAttr(6, 2) // i_offset
-    addAttr(7, 1) // i_flipX
-    addAttr(8, 1) // i_flipY
-    addAttr(9, 4) // i_color
-    addAttr(10, 4) // i_uvRect
+    // Per-instance buffer and its attributes come from ensureInstanceBatch().
+    // A lost context takes the buffer with it, so the next entity draw rebuilds it.
+    this.instanceBuffer = null
+    this.instanceData = null
 
     gl.bindVertexArray(null)
 
@@ -2246,7 +2230,7 @@ export class RenderSystem implements System {
     gl.uniform1f(this.uPremul, this.mulBlend ? 1 : 0)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData!, 0, count * FLOATS_PER_INSTANCE)
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
     this.stats.drawCalls++
     this.stats.batches++
@@ -2262,13 +2246,45 @@ export class RenderSystem implements System {
     gl.uniform1f(this.uPremul, this.mulBlend ? 1 : 0)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData!, 0, count * FLOATS_PER_INSTANCE)
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
     this.stats.drawCalls++
     this.stats.instances += count
   }
 
   // ── Write one sprite instance into instanceData ───────────────────────────
+
+  /** Allocates the entity batch and its instance attributes on the quad VAO, once per GL context. */
+  private ensureInstanceBatch(): Float32Array {
+    if (this.instanceData) return this.instanceData
+    const { gl } = this
+    const data = (this.instanceData = new Float32Array(MAX_INSTANCES * FLOATS_PER_INSTANCE))
+    gl.bindVertexArray(this.quadVAO)
+    this.instanceBuffer = gl.createBuffer()!
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, data.byteLength, gl.DYNAMIC_DRAW)
+
+    const iStride = FLOATS_PER_INSTANCE * 4
+    let byteOffset = 0
+    const addAttr = (loc: number, size: number) => {
+      gl.enableVertexAttribArray(loc)
+      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, iStride, byteOffset)
+      gl.vertexAttribDivisor(loc, 1)
+      byteOffset += size * 4
+    }
+    addAttr(2, 2) // i_pos
+    addAttr(3, 2) // i_size
+    addAttr(4, 1) // i_rot
+    addAttr(5, 2) // i_anchor
+    addAttr(6, 2) // i_offset
+    addAttr(7, 1) // i_flipX
+    addAttr(8, 1) // i_flipY
+    addAttr(9, 4) // i_color
+    addAttr(10, 4) // i_uvRect
+
+    gl.bindVertexArray(null)
+    return data
+  }
 
   private writeInstance(
     base: number,
@@ -2292,7 +2308,7 @@ export class RenderSystem implements System {
     uw: number,
     vh: number,
   ): void {
-    const d = this.instanceData
+    const d = this.instanceData ?? this.ensureInstanceBatch()
     d[base + 0] = x
     d[base + 1] = y
     d[base + 2] = w
@@ -3387,7 +3403,7 @@ export class RenderSystem implements System {
       }
       writeUV(sprite, info.iw, info.ih)
 
-      const d = this.instanceData
+      const d = this.instanceData ?? this.ensureInstanceBatch()
       const base = batchCount * FLOATS_PER_INSTANCE
       d[base] = transform.x
       d[base + 1] = transform.y
