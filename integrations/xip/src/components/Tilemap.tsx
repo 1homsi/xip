@@ -72,6 +72,11 @@ interface TiledMap {
 
 // ─── Animated tile state ──────────────────────────────────────────────────────
 
+// Tiled packs flip and rotation flags into the top three bits of each GID.
+const GID_FLIP_H = 0x80000000
+const GID_FLIP_V = 0x40000000
+const GID_FLAG_MASK = 0x1fffffff
+
 interface AnimatedTileState {
   frames: number[]
   durations: number[]
@@ -269,6 +274,8 @@ export function Tilemap({
         if (!layer.visible) continue
 
         if (layer.type === 'tilelayer' && layer.data) {
+          // Tile ids with the flag bits removed. `layer.data` keeps the flags for sprite flips.
+          const data = layer.data.map((raw) => raw & GID_FLAG_MASK)
           const collision =
             isCollisionLayer(layer, collisionLayer) || (autoColliders && solidTiles && solidTiles.length > 0)
           const trigger = !collision && isTriggerLayer(layer, triggerLayerName)
@@ -277,7 +284,7 @@ export function Tilemap({
           if (collision && navGrid) {
             for (let row = 0; row < mapData.height; row++) {
               for (let col = 0; col < mapData.width; col++) {
-                const gid = layer.data[row * mapData.width + col]
+                const gid = data[row * mapData.width + col]
                 if (gid !== 0) setWalkable(navGrid, col, row, false)
               }
             }
@@ -291,7 +298,7 @@ export function Tilemap({
               for (let row = 0; row < mapData.height; row++) {
                 solidGrid[row] = []
                 for (let col = 0; col < mapData.width; col++) {
-                  const gid = layer.data![row * mapData.width + col]
+                  const gid = data[row * mapData.width + col]
                   solidGrid[row][col] = gid !== 0 && (!solidSet || solidSet.has(gid))
                 }
               }
@@ -315,14 +322,14 @@ export function Tilemap({
                 let col = 0
                 while (col < mapData.width) {
                   const i = row * mapData.width + col
-                  const gid = layer.data[i]
+                  const gid = data[i]
                   if (gid === 0) {
                     col++
                     continue
                   }
 
                   let runLength = 1
-                  while (col + runLength < mapData.width && layer.data[row * mapData.width + col + runLength] !== 0) {
+                  while (col + runLength < mapData.width && data[row * mapData.width + col + runLength] !== 0) {
                     runLength++
                   }
 
@@ -347,9 +354,11 @@ export function Tilemap({
             }
           } else {
             // Visual tiles — render per tile with sprites
-            for (let i = 0; i < layer.data.length; i++) {
-              const gid = layer.data[i]
+            for (let i = 0; i < data.length; i++) {
+              const gid = data[i]
               if (gid === 0) continue
+              // Diagonal (transpose) flips and hex rotation are not mapped: the sprite is only mirrored.
+              const raw = layer.data[i]
 
               const col = i % mapData.width
               const row = Math.floor(i / mapData.width)
@@ -363,7 +372,14 @@ export function Tilemap({
 
               // Visual tile — load image and set frame
               const frame = getTileFrame(gid)
-              const sprite = createSprite({ width: tilewidth, height: tileheight, color: '#888', zIndex })
+              const sprite = createSprite({
+                width: tilewidth,
+                height: tileheight,
+                color: '#888',
+                zIndex,
+                flipX: (raw & GID_FLIP_H) !== 0,
+                flipY: (raw & GID_FLIP_V) !== 0,
+              })
               if (frame) {
                 sprite.frame = { sx: frame.sx, sy: frame.sy, sw: frame.sw, sh: frame.sh }
                 engine.assets
