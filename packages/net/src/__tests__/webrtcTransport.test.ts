@@ -262,6 +262,42 @@ describe('createWebRTCTransport', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
+  it('fires onConnect again when a transient "disconnected" recovers to "connected"', () => {
+    const transport = createWebRTCTransport()
+    const onConnect = vi.fn()
+    const onDisconnect = vi.fn()
+    transport.onConnect(onConnect)
+    transport.onDisconnect(onDisconnect)
+
+    const chHandlers: MockDataChannelHandlers = {}
+    pcHandlers.datachannel?.({ channel: createMockDataChannel(chHandlers) })
+    chHandlers.open?.()
+    expect(onConnect).toHaveBeenCalledTimes(1)
+
+    setPCConnectionState('disconnected')
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+
+    setPCConnectionState('connected')
+    expect(onConnect).toHaveBeenCalledTimes(2)
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports one disconnect for a drop that goes "disconnected" then "failed" then closes', () => {
+    const transport = createWebRTCTransport()
+    const onDisconnect = vi.fn()
+    transport.onDisconnect(onDisconnect)
+
+    const chHandlers: MockDataChannelHandlers = {}
+    pcHandlers.datachannel?.({ channel: createMockDataChannel(chHandlers) })
+    chHandlers.open?.()
+
+    setPCConnectionState('disconnected')
+    setPCConnectionState('failed')
+    chHandlers.close?.()
+
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+  })
+
   it('does not fire onDisconnect for benign connection state transitions', () => {
     const transport = createWebRTCTransport()
     const handler = vi.fn()
