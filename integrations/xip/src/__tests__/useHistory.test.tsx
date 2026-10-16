@@ -146,4 +146,42 @@ describe('useHistory', () => {
     act(() => result.current.push())
     expect(() => act(() => result.current.undo())).not.toThrow()
   })
+
+  it.each(['input', 'textarea', 'contenteditable'] as const)(
+    'leaves Ctrl+Z available to the browser when focus is in %s',
+    (kind) => {
+      const { result } = renderHook(() => useHistory({ bindKeyboardShortcuts: true }), { wrapper: wrapper(engine) })
+      act(() => {
+        result.current.push()
+        result.current.push()
+      })
+
+      const target =
+        kind === 'input'
+          ? document.createElement('input')
+          : document.createElement(kind === 'textarea' ? 'textarea' : 'div')
+      if (kind === 'contenteditable') target.setAttribute('contenteditable', 'true')
+      document.body.append(target)
+      const event = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true })
+      target.dispatchEvent(event)
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(result.current.canUndo).toBe(true)
+      target.remove()
+    },
+  )
+
+  it('still handles Ctrl+Z when focus is outside an editable element', () => {
+    const { result } = renderHook(() => useHistory({ bindKeyboardShortcuts: true }), { wrapper: wrapper(engine) })
+    act(() => {
+      result.current.push()
+      result.current.push()
+    })
+    const event = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true })
+
+    act(() => window.dispatchEvent(event))
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(result.current.canUndo).toBe(false)
+  })
 })

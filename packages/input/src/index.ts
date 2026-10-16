@@ -1,4 +1,5 @@
 export * from './keyboard'
+export * from './editableTarget'
 export * from './mouse'
 export * from './touch'
 export * from './gamepad'

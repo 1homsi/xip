@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest'
 import { Keyboard } from '../keyboard'
 
@@ -133,6 +134,50 @@ describe('Keyboard', () => {
       keyboard.detach()
       fireKeyDown(target, 'KeyA', 'a')
       expect(keyboard.isDown('KeyA')).toBe(false)
+    })
+  })
+
+  describe('editable targets', () => {
+    it('does not turn text-field typing into game input', () => {
+      const input = document.createElement('input')
+      document.body.append(input)
+      keyboard.detach()
+      keyboard.attach(window)
+      input.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true }))
+
+      expect(keyboard.isDown('KeyW')).toBe(false)
+      expect(keyboard.isDown('w')).toBe(false)
+
+      input.remove()
+    })
+
+    it('does not turn contenteditable typing into game input', () => {
+      const editor = document.createElement('div')
+      editor.setAttribute('contenteditable', 'true')
+      document.body.append(editor)
+      keyboard.detach()
+      keyboard.attach(window)
+      editor.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true }))
+
+      expect(keyboard.isDown('KeyW')).toBe(false)
+      expect(keyboard.isDown('w')).toBe(false)
+
+      editor.remove()
+    })
+
+    it('releases a game key if focus moves to an editable target before keyup', () => {
+      const input = document.createElement('textarea')
+      document.body.append(input)
+      keyboard.detach()
+      keyboard.attach(window)
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w' }))
+      input.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', key: 'w', bubbles: true }))
+
+      expect(keyboard.isDown('KeyW')).toBe(false)
+      expect(keyboard.isDown('w')).toBe(false)
+      expect(keyboard.isReleased('w')).toBe(true)
+
+      input.remove()
     })
   })
 
