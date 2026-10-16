@@ -87,6 +87,7 @@ export class AssetManager {
       } catch (err) {
         console.warn(`[Xip] Failed to load image: ${resolved}`)
         this._errors.push({ src: resolved, kind: 'image', error: err })
+        this.imagePromises.delete(resolved)
         throw err
       } finally {
         this._loaded++
