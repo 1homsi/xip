@@ -91,7 +91,8 @@ describe('SpriteLayer depth sort', () => {
     sort.mockClear()
     for (let i = 0; i < 3000; i++) l.sortKey[i] = 3000 - i // fully reversed
     expect(order(l)).toEqual(reference(l))
-    expect(sort).toHaveBeenCalledTimes(1)
+    // The full sort is a radix sort now, so the comparator is not called.
+    expect(sort).not.toHaveBeenCalled()
     sort.mockRestore()
   })
 
@@ -127,5 +128,22 @@ describe('SpriteLayer depth sort', () => {
     for (let i = 0; i < 4; i++) l.add(i, 0, 1, 1)
     l.sortKey[0] = 9
     expect(order(l)).toEqual([0, 1, 2, 3])
+  })
+})
+
+describe('SpriteLayer full rebuild (radix sort)', () => {
+  it('a large rebuild over tied and random keys matches the comparator order', () => {
+    const l = new SpriteLayer({ sortByKey: true, capacity: 4 })
+    const k2 = l.enableSortKey2()
+    let s = 11
+    const next = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32
+    for (let i = 0; i < 2000; i++) {
+      l.add(i, 0, 1, 1)
+      l.sortKey[i] = next() < 0.3 ? Math.floor(next() * 5) : (next() - 0.5) * 2000
+      k2[i] = Math.floor(next() * 3)
+    }
+    // Hide a few, so the rebuild also has to leave hidden sprites out.
+    for (let i = 0; i < 2000; i += 97) l.flags[i] |= SPRITE_HIDDEN
+    expect(order(l)).toEqual(reference(l))
   })
 })

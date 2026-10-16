@@ -1,5 +1,6 @@
 import { registerTextLayerRenderer } from './layerRegistry'
 import { TextLayerRenderer } from './textLayerGL'
+import { radixSortOrder } from './radixSort'
 import { GlyphAtlas, type AtlasStyle, type GlyphStyleOptions } from './glyphAtlas'
 import { parseCSSColor } from './colorParser'
 import type { LayerBlendMode } from './blendModes'
@@ -128,7 +129,7 @@ export class TextLayer {
   style!: Uint16Array
   alpha!: Float32Array
   /** Draw order key when `sortByKey` is set (lower draws first). */
-  sortKey!: Float32Array
+  sortKey!: Float64Array
   ids!: Int32Array
   /** The text of each run. Change with `setText()` (or write and call `touch()`). */
   texts: string[] = []
@@ -150,6 +151,7 @@ export class TextLayer {
   private _k = 1
   readonly zoomAware: boolean
   private _order = new Int32Array(0)
+  private _scratch = new Int32Array(0)
   private _orderCount = -1
   private _structure = 0
   private _orderStructure = -1
@@ -190,7 +192,7 @@ export class TextLayer {
   }
 
   private grow(capacity: number): void {
-    const copy = <T extends Float32Array | Uint32Array | Uint8Array | Int32Array | Uint16Array>(
+    const copy = <T extends Float32Array | Float64Array | Uint32Array | Uint8Array | Int32Array | Uint16Array>(
       old: T | undefined,
       make: new (n: number) => T,
     ): T => {
@@ -211,7 +213,7 @@ export class TextLayer {
     this.flags = copy(this.flags, Uint8Array)
     this.style = copy(this.style, Uint16Array)
     this.alpha = copy(this.alpha, Float32Array)
-    this.sortKey = copy(this.sortKey, Float32Array)
+    this.sortKey = copy(this.sortKey, Float64Array)
     this.ids = copy(this.ids, Int32Array)
     this.capacity = capacity
   }
@@ -357,7 +359,8 @@ export class TextLayer {
       this._orderStructure = this._structure
       if (this.sortByKey) {
         const K = this.sortKey
-        order.subarray(0, n).sort((a, b) => K[a] - K[b] || a - b)
+        if (this._scratch.length < n) this._scratch = new Int32Array(order.length)
+        if (!radixSortOrder(order, this._scratch, n, K)) order.subarray(0, n).sort((a, b) => K[a] - K[b] || a - b)
       }
       return order
     }

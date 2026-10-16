@@ -212,3 +212,22 @@ describe('TextLayer zoom-aware raster density', () => {
     expect(on.rasterScale).toBe(2) // zoom 4 x dpr 1 over resolution 2
   })
 })
+
+describe('TextLayer draw order (radix sort)', () => {
+  it('a rebuild and a later shuffle both match the comparator order', () => {
+    const { atlas: a } = atlas()
+    const layer = new TextLayer({ atlas: a, fontSize: 10, sortByKey: true })
+    let s = 5
+    const next = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32
+    const reference = () =>
+      Array.from({ length: layer.count }, (_, i) => i).sort((x, y) => layer.sortKey[x] - layer.sortKey[y] || x - y)
+    for (let i = 0; i < 1500; i++) {
+      layer.add('x', 0, 0)
+      layer.sortKey[i] = next() < 0.3 ? Math.floor(next() * 4) : (next() - 0.5) * 900
+    }
+    expect(Array.from(layer.drawOrder().subarray(0, layer.count))).toEqual(reference())
+    // Keys move a little: the steady insertion sort path, same answer.
+    for (let i = 0; i < 1500; i += 3) layer.sortKey[i] += 0.5
+    expect(Array.from(layer.drawOrder().subarray(0, layer.count))).toEqual(reference())
+  })
+})
