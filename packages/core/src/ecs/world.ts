@@ -125,12 +125,8 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * so JSON stays despite looking naive.
  */
 function _cloneComponent<T>(comp: T): T {
-  let hasNonFinite = false
-  const json = JSON.stringify(comp, (_key, value) => {
-    if (typeof value === 'number' && !isFinite(value)) hasNonFinite = true
-    return value
-  })
-  return hasNonFinite ? structuredClone(comp) : (JSON.parse(json) as T)
+  const json = JSON.stringify(comp)
+  return json.includes('null') ? structuredClone(comp) : (JSON.parse(json) as T)
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
@@ -860,11 +856,7 @@ export class ECSWorld {
         const json =
           '~' +
           JSON.stringify(rest, (_k, v) =>
-            typeof v === 'number' && !isFinite(v)
-              ? '~' + (v === Infinity ? 'i' : v === -Infinity ? 'm' : 'n')
-              : typeof v === 'string' && v[0] === '~'
-                ? '~' + v
-                : v,
+            typeof v === 'number' && !isFinite(v) ? '~' + v : typeof v === 'string' && v[0] === '~' ? '~' + v : v,
           )
         const db = enc.encode(json)
         encoded.push({ tb, db })
@@ -939,13 +931,11 @@ export class ECSWorld {
         const marked = json[0] === '~'
         const body = JSON.parse(marked ? json.slice(1) : json, (_k, v) =>
           marked && typeof v === 'string' && v[0] === '~'
-            ? v[1] === 'i'
-              ? Infinity
-              : v[1] === 'm'
-                ? -Infinity
-                : v[1] === 'n'
-                  ? NaN
-                  : v.slice(1)
+            ? v[1] === '~'
+              ? v.slice(1)
+              : v === '~NaN'
+                ? NaN
+                : Number(v.slice(1))
             : v,
         ) as Record<string, unknown>
         o += dataLen
