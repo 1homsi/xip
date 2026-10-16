@@ -7,7 +7,15 @@
  */
 export function canvasPoint(el: HTMLElement, clientX: number, clientY: number): { x: number; y: number } {
   const rect = el.getBoundingClientRect()
-  const sx = rect.width > 0 && el.offsetWidth > 0 ? el.offsetWidth / rect.width : 1
-  const sy = rect.height > 0 && el.offsetHeight > 0 ? el.offsetHeight / rect.height : 1
+  const sx = layoutScale(rect.width, el.offsetWidth)
+  const sy = layoutScale(rect.height, el.offsetHeight)
   return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy }
+}
+
+function layoutScale(boxSize: number, layoutSize: number): number {
+  // offsetWidth is rounded to a whole pixel, so a fractional, unscaled layout reads up to 1px off.
+  // Treat a box that close to its layout size as unscaled; a real contain scale is far larger.
+  // `!(x > 0)` also catches a missing layoutSize (undefined in hand-made mocks)
+  if (!(boxSize > 0 && layoutSize > 0) || Math.abs(boxSize - layoutSize) < 1) return 1
+  return layoutSize / boxSize
 }

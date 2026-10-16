@@ -21,6 +21,11 @@ describe('canvasPoint', () => {
     expect(canvasPoint(el, 210, 170)).toEqual({ x: 400, y: 300 })
   })
 
+  it('keeps a fractional, unscaled layout exact (offsetWidth rounds 333.4 to 333)', () => {
+    const el = boxed({ left: 0, top: 0, width: 333.4, height: 200 }, 333, 200)
+    expect(canvasPoint(el, 333.4, 100)).toEqual({ x: 333.4, y: 100 })
+  })
+
   it('falls back to unscaled points when there is no layout box', () => {
     const el = boxed({ left: 10, top: 20, width: 0, height: 0 }, 0, 0)
     expect(canvasPoint(el, 15, 25)).toEqual({ x: 5, y: 5 })

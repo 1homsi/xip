@@ -187,6 +187,20 @@ describe('TouchInput', () => {
       expect(touch.touches[0].x).toBe(400)
       expect(touch.touches[0].y).toBe(300)
     })
+
+    it('maps touchmove and touchend through a scaled element too', () => {
+      // same 800x600 layout box drawn at half size at (10, 20)
+      const scaledEl = createMockElement({ left: 10, top: 20, width: 400, height: 300 })
+      Object.assign(scaledEl, { offsetWidth: 800, offsetHeight: 600 })
+      touch.attach(scaledEl as unknown as HTMLElement)
+      scaledEl.dispatch('touchstart', createTouchEvent([{ identifier: 0, clientX: 210, clientY: 170 }]))
+      scaledEl.dispatch('touchmove', createTouchEvent([{ identifier: 0, clientX: 310, clientY: 220 }]))
+      expect(touch.touches[0].x).toBe(600)
+      expect(touch.touches[0].y).toBe(400)
+      scaledEl.dispatch('touchend', createTouchEvent([{ identifier: 0, clientX: 210, clientY: 170 }]))
+      expect(touch.justEnded[0].x).toBe(400)
+      expect(touch.justEnded[0].y).toBe(300)
+    })
   })
 
   describe('preventDefault option', () => {
