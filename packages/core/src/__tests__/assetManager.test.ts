@@ -209,3 +209,31 @@ describe('AssetManager audio unlock', () => {
     expect(c.resume).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('AssetManager.loadAudio in flight', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('shares one fetch and decode between concurrent requests for the same file', async () => {
+    const { ctx } = installAudioMocks()
+    const assets = new AssetManager()
+    const [a, b] = await Promise.all([assets.loadAudio('/a.ogg'), assets.loadAudio('/a.ogg')])
+    expect(b).toBe(a)
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1)
+    expect(ctx.decodeAudioData).toHaveBeenCalledTimes(1)
+    expect(assets.getProgress()).toMatchObject({ loaded: 1, total: 1 })
+  })
+
+  it('retries a file whose fetch throws synchronously instead of caching the rejection', async () => {
+    installAudioMocks()
+    const fetchMock = vi.mocked(globalThis.fetch)
+    fetchMock.mockImplementationOnce(() => {
+      throw new TypeError('network down')
+    })
+    const assets = new AssetManager()
+    await expect(assets.loadAudio('/a.ogg')).rejects.toThrow('network down')
+    await expect(assets.loadAudio('/a.ogg')).resolves.toBeDefined()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})

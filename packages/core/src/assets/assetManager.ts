@@ -135,12 +135,16 @@ export class AssetManager {
       } finally {
         this._loaded++
         this.emitProgress()
-        this.audioPromises.delete(resolved)
       }
     })()
     // Keep settled promises around only while in flight so failures can be
     // retried; successful buffers are served from the audio cache above.
     void promise.catch(() => {})
+    this.audioPromises.set(resolved, promise)
+    // Forget it once settled. Attached after set(): a synchronous throw from fetch settles
+    // the promise before this line, and a delete inside the body would run before the set.
+    const forget = () => this.audioPromises.delete(resolved)
+    promise.then(forget, forget)
     return promise
   }
 
