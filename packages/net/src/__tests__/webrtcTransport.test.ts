@@ -262,6 +262,67 @@ describe('createWebRTCTransport', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
+  it('fires onConnect again when a transient "disconnected" recovers to "connected"', () => {
+    const transport = createWebRTCTransport()
+    const onConnect = vi.fn()
+    const onDisconnect = vi.fn()
+    transport.onConnect(onConnect)
+    transport.onDisconnect(onDisconnect)
+
+    const chHandlers: MockDataChannelHandlers = {}
+    pcHandlers.datachannel?.({ channel: createMockDataChannel(chHandlers) })
+    chHandlers.open?.()
+    expect(onConnect).toHaveBeenCalledTimes(1)
+
+    setPCConnectionState('disconnected')
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+
+    setPCConnectionState('connected')
+    expect(onConnect).toHaveBeenCalledTimes(2)
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports one disconnect for a drop that goes "disconnected" then "failed" then closes', () => {
+    const transport = createWebRTCTransport()
+    const onDisconnect = vi.fn()
+    transport.onDisconnect(onDisconnect)
+
+    const chHandlers: MockDataChannelHandlers = {}
+    pcHandlers.datachannel?.({ channel: createMockDataChannel(chHandlers) })
+    chHandlers.open?.()
+
+    setPCConnectionState('disconnected')
+    setPCConnectionState('failed')
+    chHandlers.close?.()
+
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores open/close/messages from a data channel that was replaced', () => {
+    const transport = createWebRTCTransport()
+    const onConnect = vi.fn()
+    const onDisconnect = vi.fn()
+    const onMessage = vi.fn()
+    transport.onConnect(onConnect)
+    transport.onDisconnect(onDisconnect)
+    transport.onMessage(onMessage)
+
+    const aHandlers: MockDataChannelHandlers = {}
+    pcHandlers.datachannel?.({ channel: createMockDataChannel(aHandlers) })
+    aHandlers.open?.()
+    expect(onConnect).toHaveBeenCalledTimes(1)
+
+    const bHandlers: MockDataChannelHandlers = {}
+    pcHandlers.datachannel?.({ channel: createMockDataChannel(bHandlers) })
+    bHandlers.open?.()
+
+    aHandlers.close?.() // the stale channel closing after being replaced
+    aHandlers.message?.({ data: 'stale' })
+
+    expect(onDisconnect).not.toHaveBeenCalled()
+    expect(onMessage).not.toHaveBeenCalled()
+  })
+
   it('does not fire onDisconnect for benign connection state transitions', () => {
     const transport = createWebRTCTransport()
     const handler = vi.fn()
