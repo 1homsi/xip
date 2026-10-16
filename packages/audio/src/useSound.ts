@@ -207,9 +207,9 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
 
     return () => {
       cancelled = true
+      unmountedRef.current = true
       if (persistentRef.current && acquiredSrcRef.current === src) {
         // Leave the instances playing; they clean themselves up when they end.
-        unmountedRef.current = true
         activeInstances.current = []
         bufferRef.current = null
         acquiredSrcRef.current = null
@@ -374,6 +374,11 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     loadBuffer(newSrc)
       .then((buf) => {
         if (!buf) return
+        // Unmounted while loading: nothing could stop a source started now, so drop it.
+        if (unmountedRef.current && !persistentRef.current) {
+          releaseBuffer(newSrc)
+          return
+        }
         const previousSrc = acquiredSrcRef.current
         const ctx = getAudioCtx()
         if (ctx.state === 'suspended') void ctx.resume()
