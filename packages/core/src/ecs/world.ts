@@ -124,9 +124,15 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * objects in V8 (structuredClone's generality costs several µs extra per call),
  * so JSON stays despite looking naive.
  */
+function _hasNonFinite(value: unknown): boolean {
+  return typeof value === 'number'
+    ? !isFinite(value)
+    : !!value && typeof value === 'object' && Object.values(value).some(_hasNonFinite)
+}
+
 function _cloneComponent<T>(comp: T): T {
   const json = JSON.stringify(comp)
-  return json.includes('null') ? structuredClone(comp) : (JSON.parse(json) as T)
+  return json.includes('null') && _hasNonFinite(comp) ? structuredClone(comp) : (JSON.parse(json) as T)
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
