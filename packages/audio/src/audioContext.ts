@@ -244,6 +244,8 @@ export function getMasterVolume(): number {
 export function setGroupMute(group: AudioGroup, muted: boolean): void {
   S().groupMuted.set(group, muted)
   const node = getGroupGainNode(group)
+  // Drop any duck or fade still queued on the node, or it would override this level later.
+  node.gain.cancelScheduledValues(getAudioCtx().currentTime)
   node.gain.value = muted ? 0 : (S().groupVolumes.get(group) ?? 1)
 }
 

@@ -442,6 +442,26 @@ describe('Audio system', () => {
       expect(getGroupVolume('ambience')).toBe(1)
     })
 
+    it('muting or unmuting drops automation that was already scheduled on the group', async () => {
+      const { setGroupVolume, setGroupMute, duck } = await import('../useSound')
+      const { getGroupGainNode } = await import('../audioContext')
+
+      setGroupVolume('music', 0.8)
+      const node = getGroupGainNode('music') as unknown as ReturnType<typeof createMockGainNode>
+      duck('music', 0.3, 2) // scheduled while unmuted
+      node.gain.cancelScheduledValues.mockClear()
+
+      setGroupMute('music', true)
+      expect(node.gain.cancelScheduledValues).toHaveBeenCalledTimes(1)
+      expect(node.gain.value).toBe(0)
+
+      duck('music', 0.3, 2) // scheduled while muted
+      node.gain.cancelScheduledValues.mockClear()
+      setGroupMute('music', false)
+      expect(node.gain.cancelScheduledValues).toHaveBeenCalledTimes(1)
+      expect(node.gain.value).toBeCloseTo(0.8)
+    })
+
     it('stopGroup calls stop on all registered sources', async () => {
       const { useSound, stopGroup } = await import('../useSound')
 
