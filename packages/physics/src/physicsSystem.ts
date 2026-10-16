@@ -343,7 +343,7 @@ function sweepAABB(aCx: number, aCy: number, aHw: number, aHh: number, dx: numbe
 // ── Contact pair tracking ───────────────────────────────────────────────────
 
 // Packed numeric pair key — canonical order (min first), exact for entity
-// IDs < 2^26 (~67M; IDs are never reused, churn games climb). Zero string
+// IDs < 2^26 (~67M; IDs may be reused after clear/restore). Zero string
 // allocation per contact pair per frame.
 // Ids below 2^15 pack into a small integer (no boxed double in Maps); larger
 // ids use a disjoint range above 2^30.
@@ -425,8 +425,12 @@ export class PhysicsSystem implements System {
   // Manifold cache for warm starting
   private manifoldCache = new GenerationCache<ContactManifold>()
 
-  // BVH cache for TriMesh colliders
-  private bvhCache = new Map<number, BVH>()
+  // Collider keys keep the cache valid across entity ID reuse and allow
+  // discarded collider instances to be collected with their BVHs.
+  private bvhCache = new WeakMap<
+    TriMeshColliderComponent,
+    { bvh: BVH; vertices: { x: number; y: number }[]; indices: number[] }
+  >()
 
   // Physics hooks for filtering and modifying contacts
   private hooks: PhysicsHooks = {}
@@ -2854,12 +2858,25 @@ export class PhysicsSystem implements System {
       const mc = world.getComponent<TriMeshColliderComponent>(mid, 'TriMeshCollider')!
       if (!mc.enabled) continue
 
-      // Build or retrieve cached BVH
-      let bvh = this.bvhCache.get(mid)
-      if (!bvh) {
-        bvh = buildBVH(mc.vertices, mc.indices, mt.x, mt.y)
-        this.bvhCache.set(mid, bvh)
+      // Cache geometry in mesh-local space so moving the entity only changes
+      // the query transform. Compare values as well as array identity because
+      // callers can reshape the mutable vertices and indices in place.
+      let cachedBVH = this.bvhCache.get(mc)
+      const geometryChanged =
+        !cachedBVH ||
+        cachedBVH.vertices.length !== mc.vertices.length ||
+        cachedBVH.indices.length !== mc.indices.length ||
+        mc.vertices.some((v, i) => v.x !== cachedBVH!.vertices[i].x || v.y !== cachedBVH!.vertices[i].y) ||
+        mc.indices.some((index, i) => index !== cachedBVH!.indices[i])
+      if (geometryChanged) {
+        cachedBVH = {
+          bvh: buildBVH(mc.vertices, mc.indices),
+          vertices: mc.vertices.map(({ x, y }) => ({ x, y })),
+          indices: [...mc.indices],
+        }
+        this.bvhCache.set(mc, cachedBVH)
       }
+      const bvh = cachedBVH!.bvh
 
       for (const bid of dynamicBox) {
         const brb = world.getComponent<RigidBodyComponent>(bid, T.rigidBody)!
