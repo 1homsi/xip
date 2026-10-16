@@ -298,12 +298,14 @@ describe('createWebRTCTransport', () => {
     expect(onDisconnect).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores open/close from a data channel that was replaced', () => {
+  it('ignores open/close/messages from a data channel that was replaced', () => {
     const transport = createWebRTCTransport()
     const onConnect = vi.fn()
     const onDisconnect = vi.fn()
+    const onMessage = vi.fn()
     transport.onConnect(onConnect)
     transport.onDisconnect(onDisconnect)
+    transport.onMessage(onMessage)
 
     const aHandlers: MockDataChannelHandlers = {}
     pcHandlers.datachannel?.({ channel: createMockDataChannel(aHandlers) })
@@ -315,8 +317,10 @@ describe('createWebRTCTransport', () => {
     bHandlers.open?.()
 
     aHandlers.close?.() // the stale channel closing after being replaced
+    aHandlers.message?.({ data: 'stale' })
 
     expect(onDisconnect).not.toHaveBeenCalled()
+    expect(onMessage).not.toHaveBeenCalled()
   })
 
   it('does not fire onDisconnect for benign connection state transitions', () => {

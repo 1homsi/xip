@@ -163,6 +163,7 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
     })
 
     ch.addEventListener('message', (event: MessageEvent) => {
+      if (channel !== ch) return // replaced channels must not deliver messages
       if (event.data instanceof ArrayBuffer) {
         for (const h of binaryHandlers) h(event.data)
       } else {
