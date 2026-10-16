@@ -94,17 +94,20 @@ export function VirtualJoystick({
 
   useEffect(
     () => () => {
-      activePtr.current = null
-      setVirtualAxis(0, 0)
-      if (stickRef.current) stickRef.current.style.transform = 'translate(-50%, -50%)'
+      if (activePtr.current !== null) {
+        activePtr.current = null
+        setVirtualAxis(0, 0)
+      }
     },
     [],
   )
 
   useEffect(
     () => () => {
-      activeActionPtr.current = null
-      setVirtualButton(actionName, false)
+      if (activeActionPtr.current !== null) {
+        activeActionPtr.current = null
+        setVirtualButton(actionName, false)
+      }
     },
     [actionButton, actionName],
   )

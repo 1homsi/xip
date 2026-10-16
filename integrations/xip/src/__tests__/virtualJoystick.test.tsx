@@ -256,6 +256,18 @@ describe('VirtualJoystick pointer events', () => {
     expect(useVirtualInput().button('jump')).toBe(false)
   })
 
+  it('unmounting an idle joystick preserves input held by another source', () => {
+    setVirtualAxis(0.25, -0.5)
+    setVirtualButton('jump', true)
+    const { unmount } = render(<VirtualJoystick actionButton={false} actionName="jump" />)
+
+    unmount()
+
+    expect(useVirtualInput().axisX).toBe(0.25)
+    expect(useVirtualInput().axisY).toBe(-0.5)
+    expect(useVirtualInput().button('jump')).toBe(true)
+  })
+
   it('lost pointer capture releases the action button', () => {
     const { container } = render(<VirtualJoystick actionButton actionName="jump" />)
     const button = container.lastElementChild as HTMLElement
