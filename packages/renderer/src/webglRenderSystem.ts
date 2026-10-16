@@ -1779,11 +1779,9 @@ export class RenderSystem implements System {
     const { gl } = this
     this.program = createProgram(gl, VERT_SRC, FRAG_SRC)
 
-    // ── Unit quad geometry (6 vertices, 2 triangles) ──────────────────────────
+    // ── Unit quad geometry (4 vertices, triangle strip) ────────────────────────
     // Corners at (-0.5, -0.5) to (0.5, 0.5), UVs at (0,0) to (1,1)
-    const quadVerts = new Float32Array([
-      -0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, -0.5, 1, 0, 0.5, 0.5, 1, 1, -0.5, 0.5, 0, 1,
-    ])
+    const quadVerts = new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1])
 
     this.quadVAO = gl.createVertexArray()!
     gl.bindVertexArray(this.quadVAO)
@@ -2231,7 +2229,7 @@ export class RenderSystem implements System {
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData!, 0, count * FLOATS_PER_INSTANCE)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count)
     this.stats.drawCalls++
     this.stats.batches++
     this.stats.instances += count
@@ -2247,7 +2245,7 @@ export class RenderSystem implements System {
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData!, 0, count * FLOATS_PER_INSTANCE)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count)
     this.stats.drawCalls++
     this.stats.instances += count
   }

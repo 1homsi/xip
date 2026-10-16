@@ -26,6 +26,16 @@ function addSprite(world: ECSWorld, x: number, y: number, opts: Parameters<typeo
 }
 
 describe('headless recording renderer', () => {
+  it('stores sprite quad corners and UVs in triangle-strip order', () => {
+    const { gl, rs, world } = setup()
+    addSprite(world, 10, 20, { width: 16, height: 8 })
+    rs.update(world, 1 / 60)
+
+    expect(gl.staticBuffers).toContainEqual(
+      new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1]),
+    )
+  })
+
   it('records one instanced draw with sprite transforms and colors', () => {
     const { gl, rs, world } = setup()
     addSprite(world, 10, 20, { width: 16, height: 8, color: '#ff0000' })
@@ -34,6 +44,7 @@ describe('headless recording renderer', () => {
 
     const instanced = gl.draws.filter((d) => d.kind === 'instanced')
     expect(instanced).toHaveLength(1)
+    expect(instanced[0]).toMatchObject({ mode: gl.TRIANGLE_STRIP, vertices: 4 })
     const inst = gl.frameInstances()
     expect(inst).toHaveLength(2)
     expect(inst[0]).toMatchObject({ x: 10, y: 20, width: 16, height: 8, r: 1, g: 0, b: 0, a: 1 })
