@@ -124,8 +124,15 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * objects in V8 (structuredClone's generality costs several µs extra per call),
  * so JSON stays despite looking naive.
  */
+function _hasNonFinite(value: unknown): boolean {
+  return typeof value === 'number'
+    ? !isFinite(value)
+    : !!value && typeof value === 'object' && Object.values(value).some(_hasNonFinite)
+}
+
 function _cloneComponent<T>(comp: T): T {
-  return JSON.parse(JSON.stringify(comp)) as T
+  const json = JSON.stringify(comp)
+  return json.includes('null') && _hasNonFinite(comp) ? structuredClone(comp) : (JSON.parse(json) as T)
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
@@ -860,7 +867,12 @@ export class ECSWorld {
         const rest = { ...comp } as Record<string, unknown>
         delete rest['type']
         const tb = enc.encode(col.name)
-        const db = enc.encode(JSON.stringify(rest))
+        const json =
+          '~' +
+          JSON.stringify(rest, (_k, v) =>
+            typeof v === 'number' && !isFinite(v) ? '~' + v : typeof v === 'string' && v[0] === '~' ? '~' + v : v,
+          )
+        const db = enc.encode(json)
         encoded.push({ tb, db })
         size += 2 + tb.byteLength + 4 + db.byteLength
       }
@@ -929,7 +941,17 @@ export class ECSWorld {
         o += typeLen
         const dataLen = view.getUint32(o, true)
         o += 4
-        const body = JSON.parse(dec.decode(data.subarray(o, o + dataLen))) as Record<string, unknown>
+        const json = dec.decode(data.subarray(o, o + dataLen))
+        const marked = json[0] === '~'
+        const body = JSON.parse(marked ? json.slice(1) : json, (_k, v) =>
+          marked && typeof v === 'string' && v[0] === '~'
+            ? v[1] === '~'
+              ? v.slice(1)
+              : v === '~NaN'
+                ? NaN
+                : Number(v.slice(1))
+            : v,
+        ) as Record<string, unknown>
         o += dataLen
         components.push({ type, ...body } as Component)
       }
