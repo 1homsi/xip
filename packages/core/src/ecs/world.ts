@@ -125,7 +125,12 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * so JSON stays despite looking naive.
  */
 function _cloneComponent<T>(comp: T): T {
-  return structuredClone(comp)
+  let hasNonFinite = false
+  const json = JSON.stringify(comp, (_key, value) => {
+    if (typeof value === 'number' && !isFinite(value)) hasNonFinite = true
+    return value
+  })
+  return hasNonFinite ? structuredClone(comp) : (JSON.parse(json) as T)
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
@@ -931,22 +936,17 @@ export class ECSWorld {
         const dataLen = view.getUint32(o, true)
         o += 4
         const json = dec.decode(data.subarray(o, o + dataLen))
-        const bodyStart = json.indexOf('{')
-        const marker = json.slice(0, bodyStart)
-        const body = JSON.parse(
-          json.slice(bodyStart),
-          marker
-            ? (_k, v) =>
-                v === '~i'
-                  ? Infinity
-                  : v === '~m'
-                    ? -Infinity
-                    : v === '~n'
-                      ? NaN
-                      : typeof v === 'string' && v.startsWith('~~')
-                        ? v.slice(1)
-                        : v
-            : undefined,
+        const marked = json[0] === '~'
+        const body = JSON.parse(marked ? json.slice(1) : json, (_k, v) =>
+          marked && typeof v === 'string' && v[0] === '~'
+            ? v[1] === 'i'
+              ? Infinity
+              : v[1] === 'm'
+                ? -Infinity
+                : v[1] === 'n'
+                  ? NaN
+                  : v.slice(1)
+            : v,
         ) as Record<string, unknown>
         o += dataLen
         components.push({ type, ...body } as Component)
