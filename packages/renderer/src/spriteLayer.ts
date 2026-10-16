@@ -677,7 +677,7 @@ export class SpriteLayer {
         let j = i - 1
         while (j >= 0) {
           const other = order[j]
-          if (K[other] < K[slot] || (K[other] === K[slot] && !this.after(other, slot, K2))) break
+          if (this.compareOrder(other, slot, K, K2) <= 0) break
           order[j + 1] = other
           j--
           if (--budget < 0) {
@@ -703,26 +703,19 @@ export class SpriteLayer {
     return order
   }
 
-  /** Whether slot `a` sorts after slot `v` when their primary keys are equal. */
-  private after(a: number, v: number, K2: Float64Array | null): boolean {
+  /** Compare slots with the same NaN fallback as the full-sort path. */
+  private compareOrder(a: number, b: number, K: Float64Array, K2: Float64Array | null): number {
+    const d = K[a] - K[b]
+    if (d !== 0 && d === d) return d
     if (K2 !== null) {
-      const x = K2[a]
-      const y = K2[v]
-      if (x !== y) return x > y
+      const e = K2[a] - K2[b]
+      if (e !== 0 && e === e) return e
     }
-    return a > v
+    return a - b
   }
 
   private fullSort(order: Int32Array, m: number, K: Float64Array, K2: Float64Array | null): void {
-    order.subarray(0, m).sort((a, b) => {
-      const d = K[a] - K[b]
-      if (d !== 0 && d === d) return d
-      if (K2 !== null) {
-        const e = K2[a] - K2[b]
-        if (e !== 0 && e === e) return e
-      }
-      return a - b
-    })
+    order.subarray(0, m).sort((a, b) => this.compareOrder(a, b, K, K2))
   }
 
   /** Allocate the additive colour array (zeros = no change). Write 0xRRGGBB, then `touch()`. */

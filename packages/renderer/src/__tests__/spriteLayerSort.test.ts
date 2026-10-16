@@ -41,6 +41,20 @@ describe('SpriteLayer depth sort', () => {
     expect(order(l)).toEqual(reference(l))
   })
 
+  it('keeps incremental NaN-key ordering consistent with the full-sort fallback', () => {
+    const l = make(3, (i) => i)
+    expect(order(l)).toEqual([0, 1, 2])
+    l.sortKey[2] = Number.NaN
+    l.touchRange(2)
+    expect(order(l)).toEqual(reference(l))
+
+    const key2 = l.enableSortKey2()
+    ;[2, 1, 0].forEach((value, i) => (key2[i] = value))
+    l.sortKey.fill(Number.NaN, 0, l.count)
+    l.touchRange(0, l.count - 1)
+    expect(order(l)).toEqual([2, 1, 0])
+  })
+
   it('leaves hidden sprites out of the order and puts them back sorted', () => {
     const l = make(6, (i) => 6 - i)
     l.flags[1] |= SPRITE_HIDDEN
