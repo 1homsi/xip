@@ -164,6 +164,7 @@ export class RecordingGL {
   readonly LINK_STATUS = 0x8b82
 
   readonly draws: RecordedDraw[] = []
+  readonly staticBuffers: Float32Array[] = []
   readonly textures = new Map<number, RecordedTexture>()
   totalDraws = 0
   totalInstances = 0
@@ -279,6 +280,10 @@ export class RecordingGL {
     if (this.boundTexture) this.boundTexture.uploads++
   }
 
+  bufferData(_target: number, data: number | ArrayBufferView, usage: number): void {
+    if (usage === this.STATIC_DRAW && data instanceof Float32Array) this.staticBuffers.push(data.slice())
+  }
+
   blendFunc(src: number, dst: number): void {
     this.blendFactors = [src, dst]
   }
@@ -378,7 +383,6 @@ for (const name of [
   'bindFramebuffer',
   'bindVertexArray',
   'blitFramebuffer',
-  'bufferData',
   'clearColor',
   'compileShader',
   'deleteFramebuffer',

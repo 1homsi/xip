@@ -26,6 +26,16 @@ function addSprite(world: ECSWorld, x: number, y: number, opts: Parameters<typeo
 }
 
 describe('headless recording renderer', () => {
+  it('stores sprite quad corners and UVs in triangle-strip order', () => {
+    const { gl, rs, world } = setup()
+    addSprite(world, 10, 20, { width: 16, height: 8 })
+    rs.update(world, 1 / 60)
+
+    expect(gl.staticBuffers).toContainEqual(
+      new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1]),
+    )
+  })
+
   it('records one instanced draw with sprite transforms and colors', () => {
     const { gl, rs, world } = setup()
     addSprite(world, 10, 20, { width: 16, height: 8, color: '#ff0000' })

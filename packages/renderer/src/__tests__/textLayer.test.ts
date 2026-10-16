@@ -114,6 +114,7 @@ describe('TextLayer rendering', () => {
     expect(draws).toHaveLength(1)
     expect(draws[0].count).toBe(2000)
     expect(draws[0]).toMatchObject({ mode: gl.TRIANGLE_STRIP, vertices: 4 })
+    expect(gl.staticBuffers).toContainEqual(new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]))
     expect(rs.getStats().drawCalls).toBe(1)
     const row = rs.stats.layers.find((l) => l.kind === 'text')!
     expect(row.drawCalls).toBe(1)
