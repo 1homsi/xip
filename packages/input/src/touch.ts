@@ -1,3 +1,5 @@
+import { canvasPoint } from './canvasPoint'
+
 export interface TouchPoint {
   id: number
   x: number
@@ -29,11 +31,9 @@ export class TouchInput {
 
   private _onTouchStart = (e: TouchEvent): void => {
     if (this.preventDefault === true) e.preventDefault()
-    const rect = this._element!.getBoundingClientRect()
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i]
-      const x = t.clientX - rect.left
-      const y = t.clientY - rect.top
+      const { x, y } = canvasPoint(this._element!, t.clientX, t.clientY)
       const now = performance.now()
       this._startTime.set(t.identifier, now)
       const point: TouchPoint = {
@@ -51,30 +51,30 @@ export class TouchInput {
 
   private _onTouchMove = (e: TouchEvent): void => {
     if (this.preventDefault !== false) e.preventDefault()
-    const rect = this._element!.getBoundingClientRect()
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i]
       const existing = this._touches.get(t.identifier)
       if (!existing) continue
       const now = performance.now()
       const startTime = this._startTime.get(t.identifier) ?? now
-      existing.x = t.clientX - rect.left
-      existing.y = t.clientY - rect.top
+      const { x, y } = canvasPoint(this._element!, t.clientX, t.clientY)
+      existing.x = x
+      existing.y = y
       existing.duration = now - startTime
     }
   }
 
   private _onTouchEnd = (e: TouchEvent): void => {
     if (this.preventDefault === true) e.preventDefault()
-    const rect = this._element!.getBoundingClientRect()
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i]
       const existing = this._touches.get(t.identifier)
       if (existing) {
         const now = performance.now()
         const startTime = this._startTime.get(t.identifier) ?? now
-        existing.x = t.clientX - rect.left
-        existing.y = t.clientY - rect.top
+        const { x, y } = canvasPoint(this._element!, t.clientX, t.clientY)
+        existing.x = x
+        existing.y = y
         existing.duration = now - startTime
         this._justEnded.set(t.identifier, { ...existing })
       }

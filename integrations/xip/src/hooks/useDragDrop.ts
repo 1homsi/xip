@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import type { ECSWorld, EntityId, TransformComponent } from '@xip/core'
 import type { Camera2DComponent, SpriteComponent } from '@xip/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@xip/physics'
+import { canvasPoint } from '@xip/input'
 import { EngineContext, EntityContext, type EngineState } from '../context'
 import type { SnapControls } from './useSnap'
 
@@ -130,10 +131,8 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
     const onPointerDown = (e: PointerEvent) => {
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       if (!t) return
-      const rect = canvas.getBoundingClientRect()
-      const cssX = e.clientX - rect.left
-      const cssY = e.clientY - rect.top
-      const world = screenToWorld(engine, cssX, cssY)
+      const css = canvasPoint(canvas, e.clientX, e.clientY)
+      const world = screenToWorld(engine, css.x, css.y)
       if (!world) return
       const bounds = deriveBounds(engine.ecs, entityId as EntityId)
       if (!bounds) return
@@ -169,8 +168,8 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       if (!dragging || !drag || e.pointerId !== pointerId) return
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       if (!t) return
-      const rect = canvas.getBoundingClientRect()
-      const world = screenToWorld(engine, e.clientX - rect.left, e.clientY - rect.top)
+      const css = canvasPoint(canvas, e.clientX, e.clientY)
+      const world = screenToWorld(engine, css.x, css.y)
       if (!world) return
       let nx = startEntityX + (world.x - startWorldX)
       let ny = startEntityY + (world.y - startWorldY)

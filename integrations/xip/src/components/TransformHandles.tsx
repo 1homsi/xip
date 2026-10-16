@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, type CSSProperties, type PointerEvent as
 import type { ECSWorld, EntityId, TransformComponent } from '@xip/core'
 import type { Camera2DComponent, SpriteComponent } from '@xip/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@xip/physics'
+import { canvasPoint } from '@xip/input'
 import { EngineContext, type EngineState } from '../context'
 import { useSelection } from '../hooks/useSelection'
 import { useOverlayTick } from '../hooks/useOverlayTick'
@@ -131,10 +132,8 @@ export function TransformHandles({
         case 'rotate': {
           const screen = worldToScreenCss(engine, drag.startTransform.x, drag.startTransform.y)
           if (!screen) break
-          const rect = engine.canvas.getBoundingClientRect()
-          const centerClientX = rect.left + screen.x
-          const centerClientY = rect.top + screen.y
-          const angle = Math.atan2(e.clientY - centerClientY, e.clientX - centerClientX)
+          const pointer = canvasPoint(engine.canvas, e.clientX, e.clientY)
+          const angle = Math.atan2(pointer.y - screen.y, pointer.x - screen.x)
           // Handle sits above the top edge, so atan2 returns a value 90° less than rotation
           t.rotation = angle + Math.PI / 2
           break
