@@ -103,7 +103,7 @@ export class TextLayerRenderer {
     gl.bindVertexArray(this.vao)
     const quad = gl.createBuffer()!
     gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1]), gl.STATIC_DRAW)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW)
     gl.enableVertexAttribArray(0)
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0)
     this.buffer = gl.createBuffer()!
@@ -323,7 +323,7 @@ export class TextLayerRenderer {
   private flush(n: number): void {
     const { gl } = this
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.data, 0, n * FLOATS)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n)
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n)
     this.drawCalls++
     this.instances += n
   }

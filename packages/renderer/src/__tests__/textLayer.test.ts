@@ -113,6 +113,7 @@ describe('TextLayer rendering', () => {
     const draws = gl.draws.filter((d) => d.kind === 'instanced')
     expect(draws).toHaveLength(1)
     expect(draws[0].count).toBe(2000)
+    expect(draws[0]).toMatchObject({ mode: gl.TRIANGLE_STRIP, vertices: 4 })
     expect(rs.getStats().drawCalls).toBe(1)
     const row = rs.stats.layers.find((l) => l.kind === 'text')!
     expect(row.drawCalls).toBe(1)

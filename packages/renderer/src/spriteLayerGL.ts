@@ -260,9 +260,7 @@ export class SpriteLayerRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, quad)
     gl.bufferData(
       gl.ARRAY_BUFFER,
-      new Float32Array([
-        -0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, -0.5, 1, 0, 0.5, 0.5, 1, 1, -0.5, 0.5, 0, 1,
-      ]),
+      new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1]),
       gl.STATIC_DRAW,
     )
     gl.enableVertexAttribArray(0)
@@ -1104,7 +1102,7 @@ export class SpriteLayerRenderer {
         this.pointInstances(start)
         lastStart = start
       }
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start)
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, end - start)
       this.drawCalls++
       this.instances += end - start
     }

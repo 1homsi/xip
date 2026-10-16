@@ -34,6 +34,7 @@ describe('headless recording renderer', () => {
 
     const instanced = gl.draws.filter((d) => d.kind === 'instanced')
     expect(instanced).toHaveLength(1)
+    expect(instanced[0]).toMatchObject({ mode: gl.TRIANGLE_STRIP, vertices: 4 })
     const inst = gl.frameInstances()
     expect(inst).toHaveLength(2)
     expect(inst[0]).toMatchObject({ x: 10, y: 20, width: 16, height: 8, r: 1, g: 0, b: 0, a: 1 })

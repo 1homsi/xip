@@ -225,11 +225,7 @@ export class ShapeRenderer {
     gl.bindVertexArray(this.sdfVao)
     const quad = gl.createBuffer()!
     gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5]),
-      gl.STATIC_DRAW,
-    )
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5]), gl.STATIC_DRAW)
     gl.enableVertexAttribArray(0)
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0)
     this.sdfBuf = gl.createBuffer()!
@@ -490,7 +486,7 @@ export class ShapeRenderer {
       gl.bindVertexArray(this.sdfVao)
       gl.bindBuffer(gl.ARRAY_BUFFER, this.sdfBuf)
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.sdf, 0, this.sdfN * SDF_FLOATS)
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, this.sdfN)
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.sdfN)
       this.drawCalls++
       this.instances += this.sdfN
       this.sdfN = 0

@@ -21,13 +21,17 @@ function setup() {
     return el
   })
   const draws: { kind: string; n: number }[] = []
+  const instancedGeometry: [unknown, unknown][] = []
   const gl = new Proxy({} as Record<string, unknown>, {
     get(_t, p: string) {
       if (/^[A-Z_0-9]+$/.test(p)) return p
       if (p === 'isContextLost') return () => false
       if (p.startsWith('get') || p.startsWith('create')) return () => ({})
       if (p === 'drawArraysInstanced')
-        return (_m: unknown, _f: unknown, _c: unknown, n: number) => draws.push({ kind: 'inst', n })
+        return (mode: unknown, _f: unknown, vertices: unknown, n: number) => {
+          instancedGeometry.push([mode, vertices])
+          draws.push({ kind: 'inst', n })
+        }
       if (p === 'drawArrays') return (_m: unknown, _f: unknown, n: number) => draws.push({ kind: 'arr', n })
       return () => true
     },
@@ -42,7 +46,7 @@ function setup() {
     for (const c of comps) world.addComponent(e, c as never)
     return e
   }
-  return { rs, world, draws, add }
+  return { rs, world, draws, instancedGeometry, add }
 }
 
 describe('Circle / Line / Polygon / Gradient on WebGL', () => {
@@ -55,7 +59,7 @@ describe('Circle / Line / Polygon / Gradient on WebGL', () => {
   })
 
   it('circles are one instance each and invisible / off-screen shapes are skipped', () => {
-    const { rs, world, draws, add } = setup()
+    const { rs, world, draws, instancedGeometry, add } = setup()
     add(createCircleShape({ radius: 10 }))
     add(createCircleShape({ radius: 10, strokeColor: '#00ff00', strokeWidth: 2 }))
     add(createCircleShape({ radius: 10, visible: false }))
@@ -64,6 +68,7 @@ describe('Circle / Line / Polygon / Gradient on WebGL', () => {
     world.addComponent(far, createCircleShape({ radius: 10 }))
     rs.update(world, 1 / 60)
     expect(draws).toEqual([{ kind: 'inst', n: 2 }])
+    expect(instancedGeometry).toEqual([['TRIANGLE_STRIP', 4]])
   })
 
   it('polygons fill with triangles (concave included) and stroke with segments', () => {

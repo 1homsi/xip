@@ -17,6 +17,7 @@ function setup() {
     return el
   })
   const draws: number[] = []
+  const topology: [unknown, unknown][] = []
   const uploads: Float32Array[] = []
   const tex: string[] = []
   const params: [string, string, string][] = []
@@ -26,7 +27,11 @@ function setup() {
       if (/^[A-Z_0-9]+$/.test(p)) return p
       if (p === 'isContextLost') return () => false
       if (p.startsWith('get') || p.startsWith('create')) return () => ({})
-      if (p === 'drawArraysInstanced') return (_m: unknown, _f: unknown, _c: unknown, n: number) => draws.push(n)
+      if (p === 'drawArraysInstanced')
+        return (mode: unknown, _first: unknown, vertices: unknown, n: number) => {
+          topology.push([mode, vertices])
+          draws.push(n)
+        }
       if (p === 'bufferSubData')
         return (_t: unknown, _o: unknown, data: Float32Array, src: number, len: number) =>
           uploads.push(data.slice(src, src + len))
@@ -40,7 +45,7 @@ function setup() {
   })
   const canvas = { width: 200, height: 100, clientWidth: 200, clientHeight: 100, getContext: () => gl }
   const rs = new RenderSystem(canvas as unknown as HTMLCanvasElement, new Map())
-  return { rs, world: new ECSWorld(), draws, uploads, tex, params, blends }
+  return { rs, world: new ECSWorld(), draws, topology, uploads, tex, params, blends }
 }
 
 describe('SpriteLayer', () => {
@@ -60,7 +65,7 @@ describe('SpriteLayer', () => {
   })
 
   it('draws visible sprites in one instanced call and culls the rest', () => {
-    const { rs, world, draws } = setup()
+    const { rs, world, draws, topology } = setup()
     const layer = new SpriteLayer()
     layer.add(0, 0, 4, 4)
     layer.add(10, 10, 4, 4)
@@ -68,6 +73,7 @@ describe('SpriteLayer', () => {
     rs.addSpriteLayer(layer)
     rs.update(world, 1 / 60)
     expect(draws).toEqual([2])
+    expect(topology).toEqual([['TRIANGLE_STRIP', 4]])
     rs.removeSpriteLayer(layer)
     draws.length = 0
     rs.update(world, 1 / 60)

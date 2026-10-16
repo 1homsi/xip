@@ -21,6 +21,8 @@ export interface RecordedTexture {
 
 export interface RecordedDraw {
   kind: 'instanced' | 'arrays'
+  mode: number
+  vertices: number
   /** Instance count for instanced draws, vertex count otherwise. */
   count: number
   texture: RecordedTexture | null
@@ -126,6 +128,7 @@ export class RecordingGL {
   readonly FLOAT = 0x1406
   readonly UNSIGNED_BYTE = 0x1401
   readonly TRIANGLES = 0x0004
+  readonly TRIANGLE_STRIP = 0x0005
   readonly TEXTURE_2D = 0x0de1
   readonly TEXTURE0 = 0x84c0
   readonly TEXTURE1 = 0x84c1
@@ -284,13 +287,15 @@ export class RecordingGL {
     this.lastInstanceSrc = src
   }
 
-  drawArraysInstanced(_mode: number, _first: number, _count: number, instanceCount: number): void {
+  drawArraysInstanced(mode: number, _first: number, vertices: number, instanceCount: number): void {
     let instances: Float32Array | null = null
     if (this.captureInstances && this.lastInstanceSrc instanceof Float32Array) {
       instances = this.lastInstanceSrc.slice(0, instanceCount * INSTANCE_FLOATS)
     }
     this.draws.push({
       kind: 'instanced',
+      mode,
+      vertices,
       count: instanceCount,
       texture: this.boundTexture,
       instances,
@@ -300,9 +305,11 @@ export class RecordingGL {
     this.totalDraws++
     this.totalInstances += instanceCount
   }
-  drawArrays(_mode: number, _first: number, count: number): void {
+  drawArrays(mode: number, _first: number, count: number): void {
     this.draws.push({
       kind: 'arrays',
+      mode,
+      vertices: count,
       count,
       texture: this.boundTexture,
       instances: null,
