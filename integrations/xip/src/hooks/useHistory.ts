@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { WorldSnapshot } from '@xip/core'
+import { isEditableTarget } from '@xip/input'
 import { EngineContext } from '../context'
 
 export interface HistoryOptions {
@@ -110,6 +111,8 @@ export function useHistory(options?: HistoryOptions): HistoryControls {
   useEffect(() => {
     if (!bindKeys) return
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl+Z inside a text field is the field's own undo
+      if (isEditableTarget(e.target)) return
       const mod = e.ctrlKey || e.metaKey
       if (!mod) return
       const key = e.key.toLowerCase()

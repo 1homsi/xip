@@ -1,3 +1,5 @@
+import { isEditableTarget } from './editableTarget'
+
 export class Keyboard {
   private held = new Set<string>()
   private justPressed = new Set<string>()
@@ -11,6 +13,7 @@ export class Keyboard {
   private keyAtPress = new Map<string, string>()
 
   private onKeyDown = (e: KeyboardEvent): void => {
+    if (isEditableTarget(e.target)) return
     if (!this.held.has(e.code)) {
       this.justPressed.add(e.code)
     }
@@ -31,6 +34,10 @@ export class Keyboard {
   }
 
   private onKeyUp = (e: KeyboardEvent): void => {
+    if (isEditableTarget(e.target)) {
+      const wasHeld = e.code ? this.keyAtPress.has(e.code) || this.held.has(e.code) : this.held.has(e.key)
+      if (!wasHeld) return
+    }
     const key = (e.code && this.keyAtPress.get(e.code)) || e.key
     this.keyAtPress.delete(e.code)
     this.held.delete(e.code)
