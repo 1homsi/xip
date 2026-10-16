@@ -139,6 +139,55 @@ describe('<Game> lifecycle', () => {
     expect(queries.filter((q) => q.live).map((q) => q.media)).toEqual(['(resolution: 2dppx)'])
   })
 
+  it('caps the backing store at maxDpr and follows it when the prop changes', async () => {
+    vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(3)
+    let engine: EngineState | null = null
+    function Probe() {
+      engine = useContext(EngineContext)
+      return null
+    }
+    let rerender!: (ui: React.ReactElement) => void
+    await act(async () => {
+      ;({ rerender } = render(
+        <Game width={200} height={100} maxDpr={2} asyncAssets>
+          <Probe />
+        </Game>,
+      ))
+    })
+    expect(engine!.canvas.width).toBe(400)
+    expect(engine!.canvas.height).toBe(200)
+    expect(engine!.canvas.style.width).toBe('200px')
+    await act(async () => {
+      rerender(
+        <Game width={200} height={100} maxDpr={5} asyncAssets>
+          <Probe />
+        </Game>,
+      )
+    })
+    expect(engine!.canvas.width).toBe(600)
+    // The CSS size stays fixed while the backing store changes.
+    expect(engine!.canvas.style.width).toBe('200px')
+    expect(engine!.canvas.style.height).toBe('100px')
+  })
+
+  it('keeps a non-zero backing store for a very small maxDpr', async () => {
+    vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(3)
+    let engine: EngineState | null = null
+    function Probe() {
+      engine = useContext(EngineContext)
+      return null
+    }
+    await act(async () => {
+      render(
+        <Game width={200} height={100} maxDpr={0.001} asyncAssets>
+          <Probe />
+        </Game>,
+      )
+    })
+    expect(engine!.canvas.width).toBe(1)
+    expect(engine!.canvas.height).toBe(1)
+  })
+
   it('useCoordinates works in CSS pixels at DPR 2', async () => {
     vi.spyOn(window, 'devicePixelRatio', 'get').mockReturnValue(2)
     let coords!: ReturnType<typeof useCoordinates>
