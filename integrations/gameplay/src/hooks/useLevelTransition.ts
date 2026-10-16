@@ -38,6 +38,12 @@ export function useLevelTransition(initial: string): LevelTransitionControls {
       if (type === 'instant') {
         setCurrentLevel(level)
         setIsTransitioning(false)
+        const el = overlayRef.current
+        if (el) {
+          el.style.transition = 'none'
+          el.style.opacity = '0'
+          el.style.pointerEvents = 'none'
+        }
         return
       }
 
