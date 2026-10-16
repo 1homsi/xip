@@ -164,7 +164,8 @@ export function createTimeline(opts?: TimelineOptions): TweenTimeline {
       if (allDone && segments.length > 0) {
         if (repeatsDone < maxRepeats) {
           repeatsDone++
-          elapsed = 0
+          // Carry the overshoot past the end into the next cycle, so a loop keeps its real period
+          elapsed -= computeTotalDuration()
           resetSegments()
         } else {
           complete = true
