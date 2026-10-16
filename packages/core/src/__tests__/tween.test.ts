@@ -288,6 +288,23 @@ describe('tween', () => {
       expect(count).toBeGreaterThanOrEqual(5)
     })
 
+    it('carries a large dt overshoot into the next passes (XB-14)', () => {
+      let fired = 0
+      const t = tween(
+        0,
+        1,
+        1,
+        Ease.linear,
+        () => {},
+        () => fired++,
+        { repeat: 3 },
+      )
+      t.update(0.5)
+      t.update(10)
+      expect(t.isComplete).toBe(true)
+      expect(fired).toBe(1)
+    })
+
     it('onComplete fires only once even with repeat:2', () => {
       let fired = 0
       const t = tween(

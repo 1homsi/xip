@@ -200,16 +200,15 @@ export function tween(
 
       elapsed += dt
 
-      if (elapsed >= duration) {
+      while (elapsed >= duration && !complete) {
         // Completed one pass
-        const overshoot = elapsed - duration
         const end = forward ? to : from
         onUpdate(end)
 
         if (repeatsDone < maxRepeats) {
           repeatsDone++
           if (yoyo) forward = !forward
-          elapsed = Math.min(overshoot, duration)
+          elapsed -= duration
         } else {
           complete = true
           onComplete?.()
