@@ -124,60 +124,17 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * objects in V8 (structuredClone's generality costs several µs extra per call),
  * so JSON stays despite looking naive.
  */
-const _snapshotEnvelopeTag = '\u0000xip-snapshot'
-
-/** Pick a marker that is absent from this JSON value, making the tagged array
- * used for non-finite numbers unambiguous without wrapping ordinary objects. */
-function _snapshotNumberMarker(value: unknown): string | undefined {
-  const strings = new Set<string>()
-  let hasNonFinite = false
-  const visit = (v: unknown): void => {
-    if (typeof v === 'string') strings.add(v)
-    else if (typeof v === 'number' && !Number.isFinite(v)) hasNonFinite = true
-    else if (Array.isArray(v)) v.forEach(visit)
-    else if (v && typeof v === 'object') {
-      for (const key of Object.keys(v)) visit((v as Record<string, unknown>)[key])
-    }
-  }
-  visit(value)
-  if (!hasNonFinite) return undefined
-  let marker = '\u0000xip-number'
-  while (strings.has(marker)) marker += '\u0000'
+/** Pick a marker absent from the component's JSON, so tagged numbers cannot
+ * be confused with ordinary component strings. */
+function _snapshotNumberMarker(value: unknown): string {
+  const json = JSON.stringify(value)
+  let marker = '~'
+  while (json.includes(marker)) marker += '~'
   return marker
 }
 
-function _numTag(v: unknown, marker: string | undefined): unknown {
-  if (typeof v === 'number' && !Number.isFinite(v)) {
-    return [marker, v === Infinity ? 'Infinity' : v === -Infinity ? '-Infinity' : 'NaN']
-  }
-  return v
-}
-function _numUntag(v: unknown, marker: string | undefined): unknown {
-  if (marker && Array.isArray(v) && v.length === 2 && v[0] === marker) {
-    if (v[1] === 'Infinity') return Infinity
-    if (v[1] === '-Infinity') return -Infinity
-    if (v[1] === 'NaN') return NaN
-  }
-  return v
-}
-function _restoreTaggedNumbers(v: unknown, marker: string): unknown {
-  if (Array.isArray(v)) {
-    const untagged = _numUntag(v, marker)
-    if (untagged !== v) return untagged
-    for (let i = 0; i < v.length; i++) v[i] = _restoreTaggedNumbers(v[i], marker)
-  } else if (v && typeof v === 'object') {
-    for (const key of Object.keys(v)) {
-      ;(v as Record<string, unknown>)[key] = _restoreTaggedNumbers((v as Record<string, unknown>)[key], marker)
-    }
-  }
-  return v
-}
 function _cloneComponent<T>(comp: T): T {
-  const marker = _snapshotNumberMarker(comp)
-  return JSON.parse(
-    JSON.stringify(comp, (_k, v) => _numTag(v, marker)),
-    (_k, v) => _numUntag(v, marker),
-  ) as T
+  return structuredClone(comp)
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
@@ -905,9 +862,11 @@ export class ECSWorld {
         delete rest['type']
         const tb = enc.encode(col.name)
         const marker = _snapshotNumberMarker(rest)
-        const json = marker
-          ? JSON.stringify([_snapshotEnvelopeTag, marker, rest], (_k, v) => _numTag(v, marker))
-          : JSON.stringify(rest)
+        const json =
+          marker +
+          JSON.stringify(rest, (_k, v) =>
+            typeof v === 'number' && !isFinite(v) ? marker + (v === Infinity ? 'i' : v === -Infinity ? 'm' : 'n') : v,
+          )
         const db = enc.encode(json)
         encoded.push({ tb, db })
         size += 2 + tb.byteLength + 4 + db.byteLength
@@ -977,13 +936,12 @@ export class ECSWorld {
         o += typeLen
         const dataLen = view.getUint32(o, true)
         o += 4
-        const parsed = JSON.parse(dec.decode(data.subarray(o, o + dataLen))) as unknown
-        const enveloped =
-          Array.isArray(parsed) &&
-          parsed.length === 3 &&
-          parsed[0] === _snapshotEnvelopeTag &&
-          typeof parsed[1] === 'string'
-        const body = (enveloped ? _restoreTaggedNumbers(parsed[2], parsed[1]) : parsed) as Record<string, unknown>
+        const json = dec.decode(data.subarray(o, o + dataLen))
+        const bodyStart = json.indexOf('{')
+        const marker = json.slice(0, bodyStart)
+        const body = JSON.parse(json.slice(bodyStart), (_k, v) =>
+          v === marker + 'i' ? Infinity : v === marker + 'm' ? -Infinity : v === marker + 'n' ? NaN : v,
+        ) as Record<string, unknown>
         o += dataLen
         components.push({ type, ...body } as Component)
       }

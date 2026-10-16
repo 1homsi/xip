@@ -315,6 +315,7 @@ describe('Binary snapshot', () => {
       invalid: NaN,
       metadata: { $num: 'Infinity' },
       nested: [{ $num: 'NaN' }, -Infinity],
+      markerLike: ['~i', '~~m', '~~~n'],
     })
     const expected = {
       type: 'Settings',
@@ -323,6 +324,7 @@ describe('Binary snapshot', () => {
       invalid: NaN,
       metadata: { $num: 'Infinity' },
       nested: [{ $num: 'NaN' }, -Infinity],
+      markerLike: ['~i', '~~m', '~~~n'],
     }
 
     const snapshot = world.getSnapshot()
