@@ -75,6 +75,27 @@ describe('SpriteLayer picking', () => {
     expect(l.pickIndex(120, 20)).toBe(1)
   })
 
+  it('markAtlasDirty makes alpha picks read the repainted pixels', () => {
+    const px = new Uint8ClampedArray(16 * 16 * 4).fill(255)
+    const createElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = createElement(tag)
+      if (tag === 'canvas')
+        Object.defineProperty(el, 'getContext', {
+          configurable: true,
+          value: () => ({ drawImage() {}, getImageData: () => ({ data: px }) }),
+        })
+      return el
+    })
+    const image = { width: 16, height: 16, naturalWidth: 16, naturalHeight: 16 } as unknown as HTMLCanvasElement
+    const l = new SpriteLayer({ image, frameWidth: 16, frameHeight: 16, anchorX: 0, anchorY: 0 })
+    const a = l.add(0, 0, 16, 16, 0)
+    expect(l.pickIndex(8, 8, { alpha: 10 })).toBe(a)
+    px.fill(0) // repaint the canvas fully transparent, then tell the layer
+    l.markAtlasDirty(0)
+    expect(l.pickIndex(8, 8, { alpha: 10 })).toBe(-1)
+  })
+
   it('alpha test rejects transparent texels inside the hit rect, honouring flips', () => {
     const l = new SpriteLayer({ image: maskedImage(), frameWidth: 16, frameHeight: 16, anchorX: 0, anchorY: 0 })
     const a = l.add(0, 0, 16, 16, 0)
