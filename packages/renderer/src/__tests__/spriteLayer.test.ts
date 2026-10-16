@@ -19,6 +19,7 @@ function setup() {
   const draws: number[] = []
   const topology: [unknown, unknown][] = []
   const uploads: Float32Array[] = []
+  const staticBuffers: Float32Array[] = []
   const tex: string[] = []
   const params: [string, string, string][] = []
   const blends: string[] = []
@@ -35,6 +36,10 @@ function setup() {
       if (p === 'bufferSubData')
         return (_t: unknown, _o: unknown, data: Float32Array, src: number, len: number) =>
           uploads.push(data.slice(src, src + len))
+      if (p === 'bufferData')
+        return (_t: unknown, data: Float32Array | number, usage: unknown) => {
+          if (usage === 'STATIC_DRAW' && data instanceof Float32Array) staticBuffers.push(data.slice())
+        }
       if (p === 'texImage2D' || p === 'texSubImage2D') return () => tex.push(p)
       if (p === 'blendFunc') return (a: string, b: string) => blends.push(`${a}/${b}`)
       if (p === 'texParameteri')
@@ -45,7 +50,7 @@ function setup() {
   })
   const canvas = { width: 200, height: 100, clientWidth: 200, clientHeight: 100, getContext: () => gl }
   const rs = new RenderSystem(canvas as unknown as HTMLCanvasElement, new Map())
-  return { rs, world: new ECSWorld(), draws, topology, uploads, tex, params, blends }
+  return { rs, world: new ECSWorld(), draws, topology, uploads, staticBuffers, tex, params, blends }
 }
 
 describe('SpriteLayer', () => {
@@ -65,7 +70,7 @@ describe('SpriteLayer', () => {
   })
 
   it('draws visible sprites in one instanced call and culls the rest', () => {
-    const { rs, world, draws, topology } = setup()
+    const { rs, world, draws, topology, staticBuffers } = setup()
     const layer = new SpriteLayer()
     layer.add(0, 0, 4, 4)
     layer.add(10, 10, 4, 4)
@@ -74,6 +79,9 @@ describe('SpriteLayer', () => {
     rs.update(world, 1 / 60)
     expect(draws).toEqual([2])
     expect(topology).toEqual([['TRIANGLE_STRIP', 4]])
+    expect(staticBuffers).toContainEqual(
+      new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1]),
+    )
     rs.removeSpriteLayer(layer)
     draws.length = 0
     rs.update(world, 1 / 60)

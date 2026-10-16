@@ -22,6 +22,7 @@ function setup() {
   })
   const draws: { kind: string; n: number }[] = []
   const instancedGeometry: [unknown, unknown][] = []
+  const staticBuffers: Float32Array[] = []
   const gl = new Proxy({} as Record<string, unknown>, {
     get(_t, p: string) {
       if (/^[A-Z_0-9]+$/.test(p)) return p
@@ -33,6 +34,10 @@ function setup() {
           draws.push({ kind: 'inst', n })
         }
       if (p === 'drawArrays') return (_m: unknown, _f: unknown, n: number) => draws.push({ kind: 'arr', n })
+      if (p === 'bufferData')
+        return (_t: unknown, data: Float32Array | number, usage: unknown) => {
+          if (usage === 'STATIC_DRAW' && data instanceof Float32Array) staticBuffers.push(data.slice())
+        }
       return () => true
     },
   })
@@ -46,7 +51,7 @@ function setup() {
     for (const c of comps) world.addComponent(e, c as never)
     return e
   }
-  return { rs, world, draws, instancedGeometry, add }
+  return { rs, world, draws, instancedGeometry, staticBuffers, add }
 }
 
 describe('Circle / Line / Polygon / Gradient on WebGL', () => {
@@ -59,7 +64,7 @@ describe('Circle / Line / Polygon / Gradient on WebGL', () => {
   })
 
   it('circles are one instance each and invisible / off-screen shapes are skipped', () => {
-    const { rs, world, draws, instancedGeometry, add } = setup()
+    const { rs, world, draws, instancedGeometry, staticBuffers, add } = setup()
     add(createCircleShape({ radius: 10 }))
     add(createCircleShape({ radius: 10, strokeColor: '#00ff00', strokeWidth: 2 }))
     add(createCircleShape({ radius: 10, visible: false }))
@@ -69,6 +74,7 @@ describe('Circle / Line / Polygon / Gradient on WebGL', () => {
     rs.update(world, 1 / 60)
     expect(draws).toEqual([{ kind: 'inst', n: 2 }])
     expect(instancedGeometry).toEqual([['TRIANGLE_STRIP', 4]])
+    expect(staticBuffers).toContainEqual(new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5]))
   })
 
   it('polygons fill with triangles (concave included) and stroke with segments', () => {
