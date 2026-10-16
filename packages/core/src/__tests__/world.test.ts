@@ -226,6 +226,29 @@ describe('ECSWorld', () => {
     })
   })
 
+  describe('deterministic RNG', () => {
+    it('keeps deterministic RNG across restoreSnapshot', () => {
+      const snap = new ECSWorld().getSnapshot()
+      const a = new ECSWorld()
+      a.setDeterministicSeed(7)
+      a.restoreSnapshot(snap)
+      const b = new ECSWorld()
+      b.setDeterministicSeed(7)
+      b.restoreSnapshot(snap)
+      expect([a.rng(), a.rng(), a.rng()]).toEqual([b.rng(), b.rng(), b.rng()])
+    })
+
+    it('keeps deterministic RNG across clear()', () => {
+      const a = new ECSWorld()
+      a.setDeterministicSeed(7)
+      a.clear()
+      const b = new ECSWorld()
+      b.setDeterministicSeed(7)
+      b.clear()
+      expect([a.rng(), a.rng()]).toEqual([b.rng(), b.rng()])
+    })
+  })
+
   describe('update / systems', () => {
     it('calls all systems in order each update', () => {
       const callOrder: string[] = []
