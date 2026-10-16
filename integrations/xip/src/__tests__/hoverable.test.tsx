@@ -108,4 +108,25 @@ describe('useHoverable', () => {
     move(engine, 0, 0)
     expect(hovered).toBe(false)
   })
+
+  it('mirrors an anchored hit box when the sprite is flipped', () => {
+    const engine = makeEngine()
+    const id = entity(engine, { anchorX: 0, anchorY: 0.5, offsetX: 5, flipX: true })
+    let hovered = false
+    function Card() {
+      hovered = useHoverable({ entityId: id }).isHovered
+      return null
+    }
+    render(
+      <EngineContext.Provider value={engine}>
+        <Card />
+      </EngineContext.Provider>,
+    )
+    move(engine, -15, 0)
+    expect(hovered).toBe(true)
+    move(engine, -2, 0)
+    expect(hovered).toBe(false)
+    move(engine, 15, 0)
+    expect(hovered).toBe(false)
+  })
 })

@@ -75,22 +75,26 @@ export function useHoverable(options?: HoverableOptions): HoverableControls {
       if (!world) return
       const custom = optsRef.current?.bounds
       const bounds = custom
-        ? { ...custom, ax: 0.5, ay: 0.5, ox: 0, oy: 0 }
+        ? { ...custom, ax: 0.5, ay: 0.5, ox: 0, oy: 0, fx: 1, fy: 1 }
         : deriveBounds(engine.ecs, entityId as EntityId)
       if (!bounds) return
-      const w = bounds.width * Math.abs(t.scaleX)
-      const h = bounds.height * Math.abs(t.scaleY)
-      // Rotate the pointer into the entity's local frame
+      const w = bounds.width * t.scaleX
+      const h = bounds.height * t.scaleY
+      // Invert the entity's rotation and sprite flips to get renderer-local coordinates.
       const dx = world.x - t.x
       const dy = world.y - t.y
       const cos = Math.cos(-t.rotation)
       const sin = Math.sin(-t.rotation)
-      const localX = dx * cos - dy * sin
-      const localY = dx * sin + dy * cos
+      const localX = (dx * cos - dy * sin) * bounds.fx
+      const localY = (dx * sin + dy * cos) * bounds.fy
       // The box spans [-anchor * size + offset, (1 - anchor) * size + offset], as the renderer draws it
       const left = -bounds.ax * w + bounds.ox
       const top = -bounds.ay * h + bounds.oy
-      const inside = localX >= left && localX <= left + w && localY >= top && localY <= top + h
+      const inside =
+        localX >= Math.min(left, left + w) &&
+        localX <= Math.max(left, left + w) &&
+        localY >= Math.min(top, top + h) &&
+        localY <= Math.max(top, top + h)
 
       if (inside && !hovered) {
         hovered = true
@@ -136,6 +140,8 @@ interface HitBox {
   ay: number
   ox: number
   oy: number
+  fx: number
+  fy: number
 }
 
 function deriveBounds(ecs: ECSWorld, id: EntityId): HitBox | null {
@@ -148,11 +154,14 @@ function deriveBounds(ecs: ECSWorld, id: EntityId): HitBox | null {
       ay: sprite.anchorY ?? 0.5,
       ox: sprite.offsetX ?? 0,
       oy: sprite.offsetY ?? 0,
+      fx: sprite.flipX ? -1 : 1,
+      fy: sprite.flipY ? -1 : 1,
     }
   const box = ecs.getComponent<BoxColliderComponent>(id, 'BoxCollider')
-  if (box) return { width: box.width, height: box.height, ax: 0.5, ay: 0.5, ox: 0, oy: 0 }
+  if (box) return { width: box.width, height: box.height, ax: 0.5, ay: 0.5, ox: 0, oy: 0, fx: 1, fy: 1 }
   const circle = ecs.getComponent<CircleColliderComponent>(id, 'CircleCollider')
-  if (circle) return { width: circle.radius * 2, height: circle.radius * 2, ax: 0.5, ay: 0.5, ox: 0, oy: 0 }
+  if (circle)
+    return { width: circle.radius * 2, height: circle.radius * 2, ax: 0.5, ay: 0.5, ox: 0, oy: 0, fx: 1, fy: 1 }
   return null
 }
 
