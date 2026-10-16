@@ -265,6 +265,107 @@ describe('syncEntity', () => {
     expect(health.hp).toBe(40) // newer packet — applied
   })
 
+  it('sends a full snapshot again after the room reconnects', () => {
+    const transform = { x: 1, y: 1 }
+    world.getComponent.mockImplementation((_entityId: number, type: string) =>
+      type === 'Transform' ? transform : undefined,
+    )
+    const sync = syncEntity({
+      entityId: 3,
+      components: ['Transform'],
+      room: room as Room,
+      owner: true,
+      tickRate: 10,
+      world: world as never,
+    })
+
+    sync.start()
+    vi.advanceTimersByTime(100) // initial state
+    vi.advanceTimersByTime(100) // unchanged, nothing sent
+    expect(room.broadcast).toHaveBeenCalledTimes(1)
+
+    connected = false
+    vi.advanceTimersByTime(100)
+    connected = true
+    vi.advanceTimersByTime(100) // the receiver may have missed everything: send it all again
+    expect(room.broadcast).toHaveBeenCalledTimes(2)
+    expect((room.broadcast as ReturnType<typeof vi.fn>).mock.calls[1][0].payload.Transform).toEqual({ x: 1, y: 1 })
+  })
+
+  it('sends a full snapshot when a peer joins mid-session', () => {
+    const transform = { x: 2, y: 2 }
+    world.getComponent.mockImplementation((_entityId: number, type: string) =>
+      type === 'Transform' ? transform : undefined,
+    )
+    const peers = new Set<string>(['p1'])
+    ;(room as { peers?: Set<string> }).peers = peers
+    const sync = syncEntity({
+      entityId: 4,
+      components: ['Transform'],
+      room: room as Room,
+      owner: true,
+      tickRate: 10,
+      world: world as never,
+    })
+
+    sync.start()
+    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(100)
+    expect(room.broadcast).toHaveBeenCalledTimes(1)
+
+    peers.add('p2') // a late joiner has none of the unchanged state
+    vi.advanceTimersByTime(100)
+    expect(room.broadcast).toHaveBeenCalledTimes(2)
+    expect((room.broadcast as ReturnType<typeof vi.fn>).mock.calls[1][0].payload.Transform).toEqual({ x: 2, y: 2 })
+  })
+
+  it('accepts a restarted sender after its peer:leave and peer:join', () => {
+    const health = { hp: 10 }
+    world.getComponent.mockReturnValue(health)
+    const sync = syncEntity({
+      entityId: 5,
+      components: ['Health'],
+      room: room as Room,
+      owner: false,
+      world: world as never,
+    })
+
+    sync.applyRemoteState({
+      type: 'entity:state',
+      seq: 500,
+      peerId: 'owner',
+      payload: { entityId: 5, Health: { hp: 50 } },
+    })
+    sync.applyRemoteState({ type: 'peer:leave', peerId: 'owner', payload: null })
+    sync.applyRemoteState({ type: 'peer:join', peerId: 'owner', payload: null })
+    sync.applyRemoteState({
+      type: 'entity:state',
+      seq: 1,
+      peerId: 'owner',
+      payload: { entityId: 5, Health: { hp: 15 } },
+    })
+
+    expect(health.hp).toBe(15)
+  })
+
+  it('accepts a seq that falls far below the last applied one, but still drops small reorders', () => {
+    const health = { hp: 10 }
+    world.getComponent.mockReturnValue(health)
+    const sync = syncEntity({
+      entityId: 5,
+      components: ['Health'],
+      room: room as Room,
+      owner: false,
+      world: world as never,
+    })
+
+    sync.applyRemoteState({ type: 'entity:state', seq: 500, payload: { entityId: 5, Health: { hp: 50 } } })
+    sync.applyRemoteState({ type: 'entity:state', seq: 498, payload: { entityId: 5, Health: { hp: 20 } } })
+    expect(health.hp).toBe(50) // a small reorder, dropped
+    sync.applyRemoteState({ type: 'entity:state', seq: 2, payload: { entityId: 5, Health: { hp: 15 } } })
+    expect(health.hp).toBe(15) // the sender restarted its counter
+  })
+
   it('resets the seq ordering guard on stop', () => {
     const health = { hp: 10 }
     world.getComponent.mockReturnValue(health)
