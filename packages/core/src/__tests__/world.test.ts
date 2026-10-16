@@ -224,6 +224,72 @@ describe('ECSWorld', () => {
       expect(world.getComponent(e, 'Tag')).toBeUndefined()
       expect(world.query('Tag')).toEqual([])
     })
+
+    it('reports every live entity as destroyed', () => {
+      const a = world.createEntity()
+      const b = world.createEntity()
+      const destroyed: number[] = []
+      world.onDestroyEntity((id) => destroyed.push(id))
+      world.clear()
+      expect(destroyed.sort()).toEqual([a, b].sort())
+    })
+  })
+
+  describe('destroy listeners', () => {
+    it('fires for entities a restore drops, but not for the ones it keeps', () => {
+      const keep = world.createEntity()
+      world.addComponent(keep, { type: 'Tag', tags: ['keep'] })
+      const snap = world.getSnapshot()
+      const later = world.createEntity()
+      const destroyed: number[] = []
+      world.onDestroyEntity((id) => destroyed.push(id))
+      world.restoreSnapshot(snap)
+      expect(world.hasEntity(later)).toBe(false)
+      expect(destroyed).toContain(later)
+      // `keep` is in the snapshot: same id, so it is restored, not destroyed.
+      expect(world.hasEntity(keep)).toBe(true)
+      expect(destroyed).not.toContain(keep)
+    })
+
+    it('fires for the entities a binary restore drops too', () => {
+      const snap = world.getSnapshotBinary()
+      world.createEntity()
+      const dropped = world.createEntity()
+      const destroyed: number[] = []
+      world.onDestroyEntity((id) => destroyed.push(id))
+      world.restoreSnapshotBinary(snap)
+      expect(world.entityCount).toBe(0)
+      expect(destroyed).toContain(dropped)
+    })
+
+    it('reports the destroyed ids as gone', () => {
+      const id = world.createEntity()
+      let liveAtNotify: boolean | null = null
+      world.onDestroyEntity((destroyedId) => {
+        if (destroyedId === id) liveAtNotify = world.hasEntity(id)
+      })
+      world.clear()
+      // Matches destroyEntity(), which also notifies once the entity is gone.
+      expect(liveAtNotify).toBe(false)
+    })
+
+    it('does not reuse dropped ids while restore listeners are running', () => {
+      const snap = world.getSnapshot()
+      const dropped = [world.createEntity(), world.createEntity(), world.createEntity()]
+      const liveAtNotify: boolean[] = []
+      let spawned: number | undefined
+      world.onDestroyEntity((id) => {
+        liveAtNotify.push(world.hasEntity(id))
+        if (spawned === undefined) spawned = world.createEntity()
+      })
+
+      world.restoreSnapshot(snap)
+
+      expect(liveAtNotify).toEqual([false, false, false])
+      expect(spawned).toBeDefined()
+      expect(dropped).not.toContain(spawned)
+      expect(world.hasEntity(spawned!)).toBe(true)
+    })
   })
 
   describe('deterministic RNG', () => {
