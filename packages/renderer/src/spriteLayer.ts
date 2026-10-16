@@ -13,6 +13,9 @@ export type { FrameHit, PickSource } from './spritePick'
  */
 export const NO_SPRITE = -1
 
+/** Most touched slots whose order changed that drawOrder() moves one by one before it falls back to a pass over the whole order. */
+const SORT_REINSERT_MAX = 8
+
 export interface PickOptions {
   /**
    * Only count texels whose alpha is above this (0-255) as hits. Reads the atlas
@@ -657,6 +660,7 @@ export class SpriteLayer {
       const touched = this._orderTouched
       let touchedCount = 0
       let changed = false
+      let desync = false
       for (let slot = dirtyFirst; slot <= dirtyLast; slot++) {
         const key2 = K2 ? K2[slot] : 0
         const keysChanged = !Object.is(this._orderKey[slot], K[slot]) || !Object.is(this._orderKey2[slot], key2)
@@ -666,9 +670,12 @@ export class SpriteLayer {
         const wasVisible = this._inOrder[slot] !== 0
         touched[touchedCount++] = slot
         this._orderWasVisible[slot] = wasVisible ? 1 : 0
-        this._orderOldPos[slot] = wasVisible ? this.findOrderPosition(slot, order, this._orderCount) : -1
+        const oldPos = wasVisible ? this.findOrderPosition(slot, order, this._orderCount) : -1
+        this._orderOldPos[slot] = oldPos
+        // a snapshot that no longer matches the order (a key written without a touch) cannot be trusted to move slots
+        if (wasVisible && order[oldPos] !== slot) desync = true
       }
-      let needsReorder = false
+      let needsReorder = desync
       for (let i = 0; i < touchedCount; i++) {
         const slot = touched[i]
         const wasVisible = this._orderWasVisible[slot] !== 0
@@ -700,51 +707,57 @@ export class SpriteLayer {
         this._orderDirtyHi = -1
         return order
       }
-      for (let i = 0; i < touchedCount; i++) {
-        const slot = touched[i]
-        if (this._orderWasVisible[slot] !== 0) {
-          const pos = this.findOrderPosition(slot, order, this._orderCount)
-          order.copyWithin(pos, pos + 1, this._orderCount)
-          this._orderCount--
-          this._inOrder[slot] = 0
-        }
-      }
-      for (let i = 0; i < touchedCount; i++) {
-        const slot = touched[i]
-        this._orderKey[slot] = K[slot]
-        this._orderKey2[slot] = K2 ? K2[slot] : 0
-        this._orderFlags[slot] = flags[slot] & SPRITE_HIDDEN
-      }
-      for (let i = 0; i < touchedCount; i++) {
-        const slot = touched[i]
-        const wasVisible = this._orderWasVisible[slot] !== 0
-        const isVisible = (flags[slot] & SPRITE_HIDDEN) === 0
-        if (isVisible) {
-          let lo = 0
-          let hi = this._orderCount
-          while (lo < hi) {
-            const mid = (lo + hi) >>> 1
-            if (this.compareOrder(order[mid], slot, K, K2) < 0) lo = mid + 1
-            else hi = mid
+      // Each moved slot costs two O(n) shifts, so many of them are cheaper through the insertion pass below.
+      if (touchedCount <= SORT_REINSERT_MAX && !desync) {
+        for (let i = 0; i < touchedCount; i++) {
+          const slot = touched[i]
+          if (this._orderWasVisible[slot] !== 0) {
+            const pos = this.findOrderPosition(slot, order, this._orderCount)
+            order.copyWithin(pos, pos + 1, this._orderCount)
+            this._orderCount--
+            this._inOrder[slot] = 0
           }
-          order.copyWithin(lo + 1, lo, this._orderCount)
-          order[lo] = slot
-          this._orderCount++
-          this._inOrder[slot] = 1
         }
-        if (
-          wasVisible !== isVisible ||
-          (wasVisible && this._orderOldPos[slot] !== this.findOrderPosition(slot, order, this._orderCount))
-        ) {
-          changed = true
+        for (let i = 0; i < touchedCount; i++) {
+          const slot = touched[i]
+          this._orderKey[slot] = K[slot]
+          this._orderKey2[slot] = K2 ? K2[slot] : 0
+          this._orderFlags[slot] = flags[slot] & SPRITE_HIDDEN
         }
+        for (let i = 0; i < touchedCount; i++) {
+          const slot = touched[i]
+          if ((flags[slot] & SPRITE_HIDDEN) === 0) {
+            let lo = 0
+            let hi = this._orderCount
+            while (lo < hi) {
+              const mid = (lo + hi) >>> 1
+              if (this.compareOrder(order[mid], slot, K, K2) < 0) lo = mid + 1
+              else hi = mid
+            }
+            order.copyWithin(lo + 1, lo, this._orderCount)
+            order[lo] = slot
+            this._orderCount++
+            this._inOrder[slot] = 1
+          }
+        }
+        // The order is unchanged only if every touched slot is back where it was; judge that once all are reinserted.
+        for (let i = 0; !changed && i < touchedCount; i++) {
+          const slot = touched[i]
+          const wasVisible = this._orderWasVisible[slot] !== 0
+          const isVisible = (flags[slot] & SPRITE_HIDDEN) === 0
+          if (
+            wasVisible !== isVisible ||
+            (wasVisible && this._orderOldPos[slot] !== this.findOrderPosition(slot, order, this._orderCount))
+          )
+            changed = true
+        }
+        if (changed) this.orderVersion++
+        this.orderCount = this._orderCount
+        this._orderDirtyAll = false
+        this._orderDirtyLo = 0x7fffffff
+        this._orderDirtyHi = -1
+        return order
       }
-      if (changed) this.orderVersion++
-      this.orderCount = this._orderCount
-      this._orderDirtyAll = false
-      this._orderDirtyLo = 0x7fffffff
-      this._orderDirtyHi = -1
-      return order
     }
     const last = Math.min(hi, n - 1)
     const first = dirtyAll ? 0 : lo

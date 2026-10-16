@@ -207,6 +207,57 @@ describe('SpriteLayer depth sort', () => {
     expect(l.orderVersion).toBe(v + 1)
   })
 
+  it('bumps orderVersion when touched slots swap places even though each ends where an earlier slot was', () => {
+    const l = make(3, (i) => 3 - i)
+    expect(order(l)).toEqual([2, 1, 0])
+    const v = l.orderVersion
+    l.sortKey[1] = 3
+    l.sortKey[2] = 2
+    l.touchRange(0, 2)
+    expect(order(l)).toEqual([2, 0, 1])
+    expect(l.orderVersion).toBe(v + 1)
+  })
+
+  it('bumps orderVersion exactly when the order array changes (touch ranges on both sides of the reinsert cap, odd keys)', () => {
+    const keyOf = (r: number) => {
+      const pick = (r * 16) | 0
+      return pick === 0 ? NaN : pick === 1 ? Infinity : pick === 2 ? -Infinity : pick === 3 ? -0 : Math.floor(r * 6)
+    }
+    const total = (l: SpriteLayer) => {
+      const cmp = (a: number, b: number) => {
+        const x = l.sortKey[a]
+        const y = l.sortKey[b]
+        if (x !== x || y !== y) return x !== x ? (y !== y ? 0 : 1) : -1
+        return x < y ? -1 : x > y ? 1 : 0
+      }
+      const out: number[] = []
+      for (let i = 0; i < l.count; i++) if (!(l.flags[i] & SPRITE_HIDDEN)) out.push(i)
+      return out.sort((a, b) => cmp(a, b) || a - b)
+    }
+    for (const seed0 of [3, 11, 505, 77, 4242, 9001, 31337, 8]) {
+      let seed = seed0
+      const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296) as number
+      const l = make(200, () => keyOf(rnd()))
+      let prev = order(l)
+      expect(prev).toEqual(total(l))
+      for (let step = 0; step < 300; step++) {
+        const lo = (rnd() * l.count) | 0
+        const hi = Math.min(l.count - 1, lo + ((rnd() * (step % 3 === 0 ? 60 : 4)) | 0))
+        for (let i = lo; i <= hi; i++) if (rnd() < 0.5) l.sortKey[i] = keyOf(rnd())
+        if (rnd() < 0.15) {
+          l.flags[lo] ^= SPRITE_HIDDEN
+        }
+        l.touchRange(lo, hi)
+        const v = l.orderVersion
+        const now = order(l)
+        expect(now).toEqual(total(l))
+        const same = now.length === prev.length && now.every((slot, i) => slot === prev[i])
+        expect(l.orderVersion).toBe(same ? v : v + 1)
+        prev = now
+      }
+    }
+  })
+
   it('reuses the sorted order until a touched key changes and fixes up only touched slots', () => {
     const sort = vi.spyOn(Int32Array.prototype, 'sort')
     const l = make(1000, (i) => i)
