@@ -451,6 +451,9 @@ describe('Audio system', () => {
       duck('music', 0.3, 2) // scheduled while unmuted
       node.gain.cancelScheduledValues.mockClear()
 
+      setGroupMute('music', false) // already unmuted: the duck keeps running
+      expect(node.gain.cancelScheduledValues).not.toHaveBeenCalled()
+
       setGroupMute('music', true)
       expect(node.gain.cancelScheduledValues).toHaveBeenCalledTimes(1)
       expect(node.gain.value).toBe(0)
