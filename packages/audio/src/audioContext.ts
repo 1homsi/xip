@@ -274,6 +274,7 @@ export function stopGroup(group: AudioGroup): void {
 export function setGroupVolumeFaded(group: AudioGroup | 'master', volume: number, duration: number): void {
   const clamped = Math.max(0, Math.min(1, volume))
   S().groupVolumes.set(group, clamped)
+  if (S().groupMuted.get(group)) return // stays silent; unmuting restores this volume
   const node = getGroupGainNode(group)
   const ctx = getAudioCtx()
   const now = ctx.currentTime
@@ -342,9 +343,12 @@ export function duck(group: AudioGroup, amount: number, duration: number): void 
   const ctx = getAudioCtx()
   const now = ctx.currentTime
   const prev = S().groupVolumes.get(group) ?? 1
+  // a muted group ducks and restores to silence instead of becoming audible
+  const muted = S().groupMuted.get(group) === true
+  const low = muted ? 0 : Math.max(0, Math.min(1, amount))
   node.gain.cancelScheduledValues(now)
   node.gain.setValueAtTime(node.gain.value, now)
-  node.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, amount)), now + 0.05)
-  node.gain.setValueAtTime(Math.max(0, Math.min(1, amount)), now + duration)
-  node.gain.linearRampToValueAtTime(prev, now + duration + 0.2)
+  node.gain.linearRampToValueAtTime(low, now + 0.05)
+  node.gain.setValueAtTime(low, now + duration)
+  node.gain.linearRampToValueAtTime(muted ? 0 : prev, now + duration + 0.2)
 }
