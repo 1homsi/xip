@@ -22,14 +22,22 @@ function ensureKeys(slots: number): void {
   if (_keys.length < slots * 2) _keys = new Uint32Array(slots * 2)
 }
 
-/** Fill `_keys` for the slots in `order[0..n)`. Returns false if any key is NaN. */
-function transform(order: Int32Array, n: number, keys: Float64Array): boolean {
+/** Whether any key of the slots in `order[0..n)` is NaN. */
+function hasNaN(order: Int32Array, n: number, keys: Float64Array): boolean {
+  for (let k = 0; k < n; k++) {
+    const v = keys[order[k]]
+    if (v !== v) return true
+  }
+  return false
+}
+
+/** Fill `_keys` for the slots in `order[0..n)`. The caller has checked for NaN. */
+function transform(order: Int32Array, n: number, keys: Float64Array): void {
   // Little-endian word order: the low word of slot s is at 2s, the high word at 2s + 1.
   const bits = new Uint32Array(keys.buffer, keys.byteOffset, keys.length * 2)
   for (let k = 0; k < n; k++) {
     const s = order[k]
     const v = keys[s]
-    if (v !== v) return false
     let lo = bits[s * 2]
     let hi = bits[s * 2 + 1]
     // -0 and +0 compare equal, so they must sort as the same key.
@@ -46,7 +54,6 @@ function transform(order: Int32Array, n: number, keys: Float64Array): boolean {
     _keys[s * 2] = lo
     _keys[s * 2 + 1] = hi
   }
-  return true
 }
 
 /** One 8-bit pass: `src` -> `dst`, stable. `byte` is 0..7 of the transformed key. */
@@ -94,15 +101,13 @@ export function radixSortOrder(
   keys: Float64Array,
   keys2: Float64Array | null = null,
 ): boolean {
+  if (hasNaN(order, n, keys) || (keys2 !== null && hasNaN(order, n, keys2))) return false
   ensureKeys(keys.length)
   if (keys2 !== null) {
-    if (!transform(order, n, keys2)) return false
+    transform(order, n, keys2)
     radix(order, scratch, n)
-    if (!transform(order, n, keys)) return false
-    radix(order, scratch, n)
-    return true
   }
-  if (!transform(order, n, keys)) return false
+  transform(order, n, keys)
   radix(order, scratch, n)
   return true
 }

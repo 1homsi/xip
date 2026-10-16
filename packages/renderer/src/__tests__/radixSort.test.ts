@@ -61,5 +61,9 @@ describe('radixSortOrder', () => {
     const order = Int32Array.from([0, 1, 2])
     expect(radixSortOrder(order, new Int32Array(3), 3, K)).toBe(false)
     expect(Array.from(order)).toEqual([0, 1, 2])
+    // A NaN in the second key is caught before the first key permutes the order.
+    const K2 = Float64Array.of(0, 1, NaN)
+    expect(radixSortOrder(order, new Int32Array(3), 3, Float64Array.of(2, 1, 0), K2)).toBe(false)
+    expect(Array.from(order)).toEqual([0, 1, 2])
   })
 })
