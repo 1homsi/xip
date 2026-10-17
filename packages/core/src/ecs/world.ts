@@ -124,8 +124,25 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
  * objects in V8 (structuredClone's generality costs several µs extra per call),
  * so JSON stays despite looking naive.
  */
+// JSON.stringify turns Infinity/NaN into null, so tag non-finite numbers on the
+// way out and restore them on the way back in. Keeps the fast JSON path.
+function _numTag(v: unknown): unknown {
+  if (typeof v === 'number' && !Number.isFinite(v)) {
+    return { $num: v === Infinity ? 'Infinity' : v === -Infinity ? '-Infinity' : 'NaN' }
+  }
+  return v
+}
+function _numUntag(v: unknown): unknown {
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>
+    if (Object.keys(o).length === 1 && o['$num'] === 'Infinity') return Infinity
+    if (Object.keys(o).length === 1 && o['$num'] === '-Infinity') return -Infinity
+    if (Object.keys(o).length === 1 && o['$num'] === 'NaN') return NaN
+  }
+  return v
+}
 function _cloneComponent<T>(comp: T): T {
-  return JSON.parse(JSON.stringify(comp)) as T
+  return JSON.parse(JSON.stringify(comp, (_k, v) => _numTag(v)), (_k, v) => _numUntag(v)) as T
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
@@ -860,7 +877,7 @@ export class ECSWorld {
         const rest = { ...comp } as Record<string, unknown>
         delete rest['type']
         const tb = enc.encode(col.name)
-        const db = enc.encode(JSON.stringify(rest))
+        const db = enc.encode(JSON.stringify(rest, (_k, v) => _numTag(v)))
         encoded.push({ tb, db })
         size += 2 + tb.byteLength + 4 + db.byteLength
       }
@@ -929,7 +946,7 @@ export class ECSWorld {
         o += typeLen
         const dataLen = view.getUint32(o, true)
         o += 4
-        const body = JSON.parse(dec.decode(data.subarray(o, o + dataLen))) as Record<string, unknown>
+        const body = JSON.parse(dec.decode(data.subarray(o, o + dataLen)), (_k, v) => _numUntag(v)) as Record<string, unknown>
         o += dataLen
         components.push({ type, ...body } as Component)
       }
