@@ -543,6 +543,7 @@ const s = engine.getStats() // live object, mutated in place; copyEngineStats(s)
 
 s.gpuMs, s.gpuMsAvg       // GPU frame time in ms (EXT_disjoint_timer_query_webgl2), null if unsupported/off
 s.render.gpuTimerSupported // null = not requested, false = unsupported, true = measuring
+s.render.softwareRenderer // true = CPU WebGL (SwiftShader, llvmpipe, WARP), false = hardware, null = unknown or Canvas2D
 s.layers                  // [{ kind: 'tile' | 'sprite', name, zIndex, instances, drawCalls, uploadBytes }]
 s.tileLayerStats          // indexUploads, uploadedTexels, lutUploads, drawCalls, textureCount, textureBytes, ...
 s.render.textureCount     // live textures, TileLayer atlas / index / tint / LUT textures included

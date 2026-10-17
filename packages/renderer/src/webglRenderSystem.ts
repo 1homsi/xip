@@ -60,14 +60,16 @@ import type { TileLayerRenderStats } from '@xip/core'
 import type { TileLayerData } from './tileLayer'
 import type { GpuTiming } from './gpuTimer'
 
-// Renderer strings of CPU rasterizers (Chrome's SwiftShader, Mesa llvmpipe / softpipe).
-const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software/i
+// Renderer strings of CPU rasterizers: Chrome's SwiftShader, Mesa llvmpipe / softpipe, Windows' WARP ("Microsoft Basic Render Driver").
+const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render driver/i
 
-/** `true` when the context's renderer is a CPU rasterizer, `null` when the browser hides it. */
+/** `true` when the context's renderer is a CPU rasterizer, `null` when the browser hides it or reports nothing. */
 function isSoftwareRenderer(gl: WebGL2RenderingContext): boolean | null {
   const dbg = gl.getExtension('WEBGL_debug_renderer_info') as { UNMASKED_RENDERER_WEBGL: number } | null
   if (!dbg) return null
-  return SOFTWARE_RENDERER.test(String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)))
+  const renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+  if (typeof renderer !== 'string' || !renderer) return null
+  return SOFTWARE_RENDERER.test(renderer)
 }
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
