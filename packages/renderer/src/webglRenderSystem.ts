@@ -3103,11 +3103,20 @@ export class RenderSystem implements System {
     // ── Clear ────────────────────────────────────────────────────────────────
     const [br, bg, bb] = parseCSSColor(background)
     gl.viewport(0, 0, W, H)
-    gl.clearColor(br, bg, bb, 1)
-    gl.clear(gl.COLOR_BUFFER_BIT)
+    // Base tile layers flagged `cache` take over the clear and their own draw (see TileLayerRenderer.renderBase).
+    // Parallax sits between the clear and the tiles, so a frame with parallax never takes that path.
+    const parallaxEntities = world.query('ParallaxLayer')
+    const baseTiles =
+      !ppEnabled &&
+      parallaxEntities.length === 0 &&
+      this._tileLayers !== null &&
+      this._tileLayers.renderBase(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl, W, H, br, bg, bb)
+    if (!baseTiles) {
+      gl.clearColor(br, bg, bb, 1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+    }
 
     // ── Parallax pre-pass ─────────────────────────────────────────────────────
-    const parallaxEntities = world.query('ParallaxLayer')
     if (parallaxEntities.length > 0) {
       parallaxEntities.sort((a: EntityId, b: EntityId) => {
         const za = world.getComponent<ParallaxLayerComponent>(a, 'ParallaxLayer')!.zIndex
@@ -3155,7 +3164,7 @@ export class RenderSystem implements System {
     }
 
     if (this._tileLayers) {
-      this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl)
+      if (!baseTiles) this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl)
       this.stats.drawCalls += this._tileLayers.stats.drawCalls
       this._tileLayers.fold(this.stats, this._texBytes.size, false)
     }

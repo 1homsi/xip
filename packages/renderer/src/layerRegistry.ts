@@ -26,6 +26,25 @@ export interface TileRenderer {
     shakeY: number,
     dpr?: number,
   ): void
+  /**
+   * Clears the `w` x `h` target and draws the base layers (no `renderLayer`) from a cached copy, when one
+   * of them sets `cache`. Returns false and draws nothing otherwise: the caller then clears and calls `render()`.
+   */
+  renderBase(
+    camX: number,
+    camY: number,
+    zoom: number,
+    canvasW: number,
+    canvasH: number,
+    shakeX: number,
+    shakeY: number,
+    dpr: number,
+    w: number,
+    h: number,
+    clearR: number,
+    clearG: number,
+    clearB: number,
+  ): boolean
   /** Draw one of {@link sorted} using the camera of the last `render()`. */
   drawSorted(layer: TileLayerData): void
   contextRestored(): void

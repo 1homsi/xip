@@ -102,6 +102,12 @@ export interface TileLayerOptions {
   tinted?: boolean
   /** Allocate the per-tile additive bias layer up front (otherwise on first setBias). */
   biased?: boolean
+  /**
+   * Draw the base layers (those without a `renderLayer`) from a cached copy while the camera and
+   * those layers stay still. A frame where the camera or a layer changed is drawn directly, as
+   * without the flag, so this only pays off on a static layer such as terrain. Default false.
+   */
+  cache?: boolean
 }
 
 export type TileMinFilter = 'nearest' | 'mipmap'
@@ -190,6 +196,8 @@ export class TileLayerData {
   biases: Uint8Array | null = null
   /** Bumped when the bias layer is (re)allocated or fully replaced. */
   biasVersion = 0
+  /** See {@link TileLayerOptions.cache}. */
+  cache: boolean
   private _jitter = 0
   private _minFilter: TileMinFilter = 'nearest'
   private _farZoomPx = 2
@@ -240,6 +248,7 @@ export class TileLayerData {
     this._jitter = opts.jitter ?? 0
     this._minFilter = opts.minFilter ?? 'nearest'
     this._farZoomPx = opts.farZoomPx ?? 2
+    this.cache = opts.cache ?? false
     if (opts.tinted) this.enableTints()
     if (opts.biased) this.enableBias()
   }

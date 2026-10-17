@@ -230,6 +230,18 @@ export class TileLayerRenderer {
   private frame = 0
   private lastLayerCount = 0
 
+  // Base-pass cache (`TileLayerData.cache`): the base layers over the clear colour, in one RGBA8 target.
+  // `cacheValid` means `cacheFBO` holds the frame described by `pNum` / `pRef`, the key of the last frame.
+  private cacheFBO: WebGLFramebuffer | null = null
+  private cacheTex: WebGLTexture | null = null
+  private cacheW = 0
+  private cacheH = 0
+  private cacheValid = false
+  private kNum: number[] = []
+  private kRef: unknown[] = []
+  private pNum: number[] = []
+  private pRef: unknown[] = []
+
   // What `fold` has already added to the render stats this frame / for live textures.
   private foldU = 0
   private foldB = 0
@@ -372,6 +384,112 @@ export class TileLayerRenderer {
     dpr = 1,
   ): void {
     this.stats.drawCalls = 0
+    this.setCam(camX, camY, zoom, canvasW, canvasH, shakeX, shakeY, dpr)
+    this.drawLayers(false)
+  }
+
+  /**
+   * Clears the `w` x `h` target to `clear` and draws the base layers (those without a `renderLayer`),
+   * with the camera of this call. Returns false, drawing nothing, unless a base layer sets `cache`:
+   * then the caller skips its own clear and `render()`.
+   *
+   * With the cache, a frame whose key (camera, target, clear colour, and each base layer's revision and
+   * tileset) equals the previous frame's is copied from the cached target. The copy is a plain blit of the
+   * same shader output, so the pixels are those of the direct path. A frame whose key moved is drawn
+   * directly. Call only when the target is the default framebuffer.
+   */
+  renderBase(
+    camX: number,
+    camY: number,
+    zoom: number,
+    canvasW: number,
+    canvasH: number,
+    shakeX: number,
+    shakeY: number,
+    dpr: number,
+    w: number,
+    h: number,
+    clearR: number,
+    clearG: number,
+    clearB: number,
+  ): boolean {
+    const { gl } = this
+    const layers = this.layers
+    let cached = false
+    for (let i = 0; i < layers.length; i++) {
+      if (layers[i].renderLayer === undefined && layers[i].cache) cached = true
+    }
+    if (!cached || !this.program || !this.u) {
+      this.cacheValid = false
+      this.pNum.length = 0
+      return false
+    }
+
+    this.stats.drawCalls = 0
+    this.setCam(camX, camY, zoom, canvasW, canvasH, shakeX, shakeY, dpr)
+    this.buildKey(w, h, clearR, clearG, clearB)
+    const still = this.keyEquals()
+    const k = this.pNum
+    this.pNum = this.kNum
+    this.kNum = k
+    const r = this.pRef
+    this.pRef = this.kRef
+    this.kRef = r
+
+    if (!still) {
+      this.cacheValid = false
+      gl.clearColor(clearR, clearG, clearB, 1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      this.drawLayers(false)
+      const dbgDirect = new Uint8Array(4) // DBG_TMP
+      gl.readPixels(Math.floor(w / 2), Math.floor(h / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, dbgDirect) // DBG_TMP
+      ;(globalThis as unknown as { __tileDbgDirect?: unknown }).__tileDbgDirect = { px: Array.from(dbgDirect), err: gl.getError() } // DBG_TMP
+      return true
+    }
+    if (!this.cacheValid) {
+      this.ensureCache(w, h)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.cacheFBO)
+      gl.clearColor(clearR, clearG, clearB, 1)
+      gl.clear(gl.COLOR_BUFFER_BIT) // DBG_TMP
+      const dbgStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER) // DBG_TMP
+      const dbgVp = gl.getParameter(gl.VIEWPORT) as Int32Array // DBG_TMP
+      const dbgSkip: string[] = [] // DBG_TMP
+      for (const layer of this.layers) { // DBG_TMP
+        if (layer.renderLayer !== undefined) continue // DBG_TMP
+        dbgSkip.push(`vis=${layer.visible} op=${layer.opacity} ready=${isTilesetReady(layer.tileset)} tw=${layer.tileWorldWidth} w=${layer.width} tex=${layer.tileset.image ? 'y' : 'n'}`) // DBG_TMP
+      } // DBG_TMP
+      this.stats.drawCalls = 0 // DBG_TMP
+      this.drawLayers(false)
+      const dbgErr = gl.getError() // DBG_TMP
+      const dbgPx = new Uint8Array(4) // DBG_TMP
+      const dbgX = Math.floor(w / 2), dbgY = Math.floor(h / 2) // DBG_TMP
+      gl.readPixels(dbgX, dbgY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, dbgPx) // DBG_TMP
+      const dbgBlend = [gl.BLEND_SRC_RGB, gl.BLEND_DST_RGB, gl.BLEND_SRC_ALPHA, gl.BLEND_DST_ALPHA, gl.BLEND_EQUATION_RGB, gl.BLEND_EQUATION_ALPHA].map((p) => gl.getParameter(p)) // DBG_TMP
+      ;(globalThis as unknown as { __tileDbgFbo?: unknown }).__tileDbgFbo = { px: Array.from(dbgPx), blend: dbgBlend, dbgErr: gl.getError() } // DBG_TMP
+      ;(globalThis as unknown as { __tileDbg?: unknown }).__tileDbg = { status: dbgStatus, vp: Array.from(dbgVp), draws: this.stats.drawCalls, err: dbgErr, w, h, cam: [camX, camY, zoom, canvasW, canvasH, dpr], layers: dbgSkip, nLayers: this.layers.length, program: !!this.program, u: !!this.u, range: Array.from(this.range), blend: gl.isEnabled(gl.BLEND), scissor: gl.isEnabled(gl.SCISSOR_TEST), depth: gl.isEnabled(gl.DEPTH_TEST), cm: gl.getParameter(gl.COLOR_WRITEMASK) } // DBG_TMP
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      this.cacheValid = true
+    }
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.cacheFBO)
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
+    gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    const dbgBlitPx = new Uint8Array(4) // DBG_TMP
+    gl.readPixels(Math.floor(w / 2), Math.floor(h / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, dbgBlitPx) // DBG_TMP
+    ;(globalThis as unknown as { __tileDbgBlit?: unknown }).__tileDbgBlit = { px: Array.from(dbgBlitPx), err: gl.getError(), status: gl.checkFramebufferStatus(gl.READ_FRAMEBUFFER), cacheFBO: !!this.cacheFBO, cacheValid: this.cacheValid } // DBG_TMP
+    return true
+  }
+
+  private setCam(
+    camX: number,
+    camY: number,
+    zoom: number,
+    canvasW: number,
+    canvasH: number,
+    shakeX: number,
+    shakeY: number,
+    dpr: number,
+  ): void {
     const c = this.cam
     c.x = camX
     c.y = camY
@@ -381,7 +499,55 @@ export class TileLayerRenderer {
     c.sx = shakeX
     c.sy = shakeY
     c.dpr = dpr
-    this.drawLayers(false)
+  }
+
+  /** Fills `kNum` / `kRef` with everything the base pass reads: the camera, the target, and each base layer's state. */
+  private buildKey(w: number, h: number, clearR: number, clearG: number, clearB: number): void {
+    const c = this.cam
+    const n = this.kNum
+    const refs = this.kRef
+    n.length = 0
+    refs.length = 0
+    n.push(c.x, c.y, c.zoom, c.w, c.h, c.sx, c.sy, c.dpr, w, h, clearR, clearG, clearB)
+    for (const layer of this.layers) {
+      if (layer.renderLayer !== undefined) continue
+      n.push(layer.revision, layer.tints ? 1 : 0, layer.biases ? 1 : 0, isTilesetReady(layer.tileset) ? 1 : 0)
+      refs.push(layer, layer.tileset, layer.tileset.image)
+    }
+  }
+
+  private keyEquals(): boolean {
+    const n = this.kNum
+    const p = this.pNum
+    if (n.length !== p.length || this.kRef.length !== this.pRef.length) return false
+    for (let i = 0; i < n.length; i++) if (n[i] !== p[i]) return false
+    for (let i = 0; i < this.kRef.length; i++) if (this.kRef[i] !== this.pRef[i]) return false
+    return true
+  }
+
+  private ensureCache(w: number, h: number): void {
+    if (this.cacheFBO && this.cacheW === w && this.cacheH === h) return
+    const { gl } = this
+    if (this.cacheFBO) gl.deleteFramebuffer(this.cacheFBO)
+    this.free(this.cacheTex)
+    const tex = this.track(gl.createTexture()!, w * h * 4)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, w, h)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    const fbo = gl.createFramebuffer()!
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+    this.cacheFBO = fbo
+    this.cacheTex = tex
+    this.cacheW = w
+    this.cacheH = h
+    this.cacheValid = false
   }
 
   /**
@@ -513,6 +679,12 @@ export class TileLayerRenderer {
     this.dummyRGBA = null
     this.u = null
     this.lastLayerCount = -1
+    this.cacheFBO = null
+    this.cacheTex = null
+    this.cacheW = 0
+    this.cacheH = 0
+    this.cacheValid = false
+    this.pNum.length = 0
   }
 
   dispose(): void {
@@ -524,6 +696,8 @@ export class TileLayerRenderer {
     if (this.vbo) gl.deleteBuffer(this.vbo)
     if (this.dummyLut) gl.deleteTexture(this.dummyLut)
     if (this.dummyRGBA) gl.deleteTexture(this.dummyRGBA)
+    if (this.cacheFBO) gl.deleteFramebuffer(this.cacheFBO)
+    this.free(this.cacheTex)
     this.contextRestored()
   }
 
