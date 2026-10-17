@@ -7,7 +7,7 @@ import {
   type TileLayerRenderStats,
 } from '@xip/core'
 import { buildTileMips } from './tileMips'
-import { isTilesetReady, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
+import { isTilesetReady, tileHash, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
 
 // One quad per visible page; the fragment shader looks the tile id up in an
 // integer index texture and fetches the exact atlas texel (no filtering, so no
@@ -42,7 +42,6 @@ in vec2 v_tile;
 uniform sampler2D u_atlas;
 uniform usampler2D u_index;
 uniform usampler2D u_lut;
-uniform usampler2D u_var;
 uniform sampler2D u_tint;
 uniform sampler2D u_bias;
 uniform int u_hasBias;
@@ -51,8 +50,6 @@ uniform sampler2D u_mip;
 uniform float u_lod;
 uniform uint u_lutSize;
 uniform int u_lutW;
-uniform uint u_varSize;
-uniform int u_varW;
 uniform ivec2 u_pageSize;
 uniform ivec2 u_pageCell;
 uniform ivec4 u_ts;
@@ -93,14 +90,9 @@ vec4 mipTap(int t, int L, vec2 f) {
 }
 void main() {
   ivec2 cell = clamp(ivec2(floor(v_tile)), ivec2(0), u_pageSize - 1);
+  // The index holds the variant already picked for each cell (see variantId), so one fetch finds the tile.
   uint id = texelFetch(u_index, cell, 0).r;
   if (id == 0u) discard;
-  uint h = tileHash(uvec2(cell + u_pageCell));
-  if (id < u_varSize) {
-    uint head = fetchU(u_var, u_varW, id);
-    uint n = head & 255u;
-    if (n > 0u) id = fetchU(u_var, u_varW, (head >> 8) + h % n);
-  }
   if (id < u_lutSize) id = fetchU(u_lut, u_lutW, id);
   if (id == 0u) discard;
   int t = int(id - 1u);
@@ -122,7 +114,10 @@ void main() {
     c = texelFetch(u_atlas, org + px, 0);
   }
   if (u_hasTint == 1) c *= texelFetch(u_tint, cell, 0);
-  if (u_jitter > 0.0) c.rgb *= 1.0 + (float(h >> 8 & 255u) / 255.0 - 0.5) * u_jitter;
+  if (u_jitter > 0.0) {
+    uint h = tileHash(uvec2(cell + u_pageCell));
+    c.rgb *= 1.0 + (float(h >> 8 & 255u) / 255.0 - 0.5) * u_jitter;
+  }
   if (u_hasBias == 1) c.rgb += texelFetch(u_bias, cell, 0).rgb * c.a;
   fragColor = vec4(c.rgb * u_layerTint.rgb, c.a * u_opacity * u_layerTint.a);
   fragColor.rgb *= mix(1.0, fragColor.a, u_premul);
@@ -161,9 +156,9 @@ interface LayerGL {
   mipImage: unknown
   tintVersion: number
   biasVersion: number
-  varTex: WebGLTexture | null
-  varW: number
-  varVersion: number
+  /** The index texture's source: the tile ids with each cell's variant picked. Null without variants. */
+  resolved: Uint16Array | Uint32Array | null
+  resolvedVersion: number
   drawnRevision: number
   seenFrame: number
 }
@@ -185,14 +180,23 @@ interface Uniforms {
   opacity: WebGLUniformLocation | null
   layerTint: WebGLUniformLocation | null
   premul: WebGLUniformLocation | null
-  varSize: WebGLUniformLocation | null
-  varW: WebGLUniformLocation | null
   pageCell: WebGLUniformLocation | null
   jitter: WebGLUniformLocation | null
   hasTint: WebGLUniformLocation | null
   hasBias: WebGLUniformLocation | null
   useAvg: WebGLUniformLocation | null
   lod: WebGLUniformLocation | null
+}
+
+/**
+ * The tile a cell draws before animation, as the shader used to pick it per pixel: the variant list
+ * entry chosen by the cell's hash (the same as {@link TileLayerData.variantAt}).
+ */
+function variantId(table: Uint32Array, size: number, id: number, x: number, y: number): number {
+  if (id === 0 || id >= size) return id
+  const head = table[id]
+  const n = head & 255
+  return n === 0 ? id : table[(head >>> 8) + (tileHash(x, y) % n)]
 }
 
 export type { TileLayerRenderStats }
@@ -438,8 +442,6 @@ export class TileLayerRenderer {
       gl.uniform1f(u.premul, layer.blend === 'multiply' ? 1 : 0)
       gl.uniform1ui(u.lutSize, s.lutTex ? layer.lutSize : 0)
       gl.uniform1i(u.lutW, s.lutW || 1)
-      gl.uniform1ui(u.varSize, s.varTex ? layer.variantSize : 0)
-      gl.uniform1i(u.varW, s.varW || 1)
       gl.uniform1f(u.jitter, layer.jitter)
       // Below ~2 device pixels per tile, one texel per pixel aliases; use the tile's average colour.
       const pxPerTile = Math.min(layer.tileWorldWidth, layer.tileWorldHeight) * zoom * dpr
@@ -465,8 +467,6 @@ export class TileLayerRenderer {
       gl.bindTexture(gl.TEXTURE_2D, s.atlasTex)
       gl.activeTexture(gl.TEXTURE2)
       gl.bindTexture(gl.TEXTURE_2D, s.lutTex ?? this.dummyLut)
-      gl.activeTexture(gl.TEXTURE3)
-      gl.bindTexture(gl.TEXTURE_2D, s.varTex ?? this.dummyLut)
       gl.activeTexture(gl.TEXTURE5)
       gl.bindTexture(gl.TEXTURE_2D, s.avgTex ?? this.dummyRGBA)
       gl.activeTexture(gl.TEXTURE6)
@@ -560,8 +560,6 @@ export class TileLayerRenderer {
       opacity: loc('u_opacity'),
       layerTint: loc('u_layerTint'),
       premul: loc('u_premul'),
-      varSize: loc('u_varSize'),
-      varW: loc('u_varW'),
       pageCell: loc('u_pageCell'),
       jitter: loc('u_jitter'),
       hasTint: loc('u_hasTint'),
@@ -573,7 +571,6 @@ export class TileLayerRenderer {
     gl.uniform1i(loc('u_atlas'), 0)
     gl.uniform1i(loc('u_index'), 1)
     gl.uniform1i(loc('u_lut'), 2)
-    gl.uniform1i(loc('u_var'), 3)
     gl.uniform1i(loc('u_tint'), 4)
     gl.uniform1i(loc('u_bias'), 7)
     gl.uniform1i(loc('u_avg'), 5)
@@ -644,9 +641,8 @@ export class TileLayerRenderer {
       mipImage: null,
       tintVersion: -1,
       biasVersion: -1,
-      varTex: null,
-      varW: 0,
-      varVersion: -1,
+      resolved: null,
+      resolvedVersion: -1,
       drawnRevision: -1,
       seenFrame: 0,
     }
@@ -666,17 +662,28 @@ export class TileLayerRenderer {
       this.uploadBiasFull(layer, s)
       biasFresh = true
     }
-    const needFull = s.fullVersion !== layer.fullVersion
+    // Variant picks are made here, once per change, not per pixel in the shader. `resolved` is what the
+    // index is filled from; without variants that is the layer's own ids.
+    const variantsStale = s.resolvedVersion !== layer.variantVersion
+    if (variantsStale) {
+      s.resolvedVersion = layer.variantVersion
+      if (!layer.variantTable) s.resolved = null
+      else if (!s.resolved)
+        s.resolved = s.wide ? new Uint32Array(layer.tiles.length) : new Uint16Array(layer.tiles.length)
+    }
+    const needFull = s.fullVersion !== layer.fullVersion || variantsStale
     if (needFull || layer.dirtyCount > 0) {
       const fmt = gl.RED_INTEGER
       const type = s.wide ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+      const src = s.resolved ?? layer.tiles
       gl.activeTexture(gl.TEXTURE1)
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
       gl.pixelStorei(gl.UNPACK_ROW_LENGTH, layer.width)
       if (needFull) {
+        if (s.resolved) this.bakeRect(layer, s, 0, 0, layer.width, layer.height)
         for (let p = 0; p < s.pages.length; p++) {
           const pg = s.pages[p]
-          this.subUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h, fmt, type)
+          this.subUpload(src, pg, pg.x0, pg.y0, pg.w, pg.h, fmt, type)
           // setTiles/fill drop the pending dirty list, so a setTint made in the same frame would
           // otherwise never reach the GPU: re-upload the page's tints with the full replace.
           if (layer.tints && pg.tint && !tintsFresh) this.tintUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h)
@@ -692,7 +699,8 @@ export class TileLayerRenderer {
           const pg = s.pages[Math.floor(y0 / s.pageTiles) * s.pagesX + Math.floor(x0 / s.pageTiles)]
           const w = rect[o + 2] - x0 + 1
           const h = rect[o + 3] - y0 + 1
-          this.subUpload(layer, pg, x0, y0, w, h, fmt, type)
+          if (s.resolved) this.bakeRect(layer, s, x0, y0, w, h)
+          this.subUpload(src, pg, x0, y0, w, h, fmt, type)
           if (layer.tints && pg.tint) this.tintUpload(layer, pg, x0, y0, w, h)
           if (layer.biases && pg.bias) this.biasUpload(layer, pg, x0, y0, w, h)
         }
@@ -705,7 +713,20 @@ export class TileLayerRenderer {
       gl.activeTexture(gl.TEXTURE0)
     }
     if (s.lutVersion !== layer.lutVersion) this.uploadLut(layer, s)
-    if (s.varVersion !== layer.variantVersion) this.uploadVariants(layer, s)
+  }
+
+  /** Fills `resolved` for a cell rectangle: the tile ids with their variant picked (see {@link variantId}). */
+  private bakeRect(layer: TileLayerData, s: LayerGL, x0: number, y0: number, w: number, h: number): void {
+    const out = s.resolved!
+    const ids = layer.tiles
+    const table = layer.variantTable!
+    const size = layer.variantSize
+    for (let y = y0; y < y0 + h; y++) {
+      for (let x = x0; x < x0 + w; x++) {
+        const i = y * layer.width + x
+        out[i] = variantId(table, size, ids[i], x, y)
+      }
+    }
   }
 
   private uploadTintsFull(layer: TileLayerData, s: LayerGL): void {
@@ -774,25 +795,8 @@ export class TileLayerRenderer {
     gl.activeTexture(gl.TEXTURE1)
   }
 
-  private uploadVariants(layer: TileLayerData, s: LayerGL): void {
-    const { gl } = this
-    s.varVersion = layer.variantVersion
-    this.free(s.varTex)
-    s.varTex = null
-    const table = layer.variantTable
-    if (!table) return
-    const w = Math.min(table.length, MAX_LUT_W)
-    const h = Math.ceil(table.length / w)
-    const data = w * h === table.length ? table : new Uint32Array(w * h)
-    if (data !== table) data.set(table)
-    s.varTex = this.createIntTexture(w, h, true)
-    s.varW = w
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RED_INTEGER, gl.UNSIGNED_INT, data, 0)
-    this.up(w * h * 4)
-  }
-
   private subUpload(
-    layer: TileLayerData,
+    src: Uint16Array | Uint32Array,
     pg: Page,
     x: number,
     y: number,
@@ -805,10 +809,10 @@ export class TileLayerRenderer {
     gl.bindTexture(gl.TEXTURE_2D, pg.tex)
     gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
     gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, fmt, type, layer.tiles, 0)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, fmt, type, src, 0)
     this.stats.indexUploads++
     this.stats.uploadedTexels += w * h
-    this.up(w * h * (layer.tiles instanceof Uint32Array ? 4 : 2))
+    this.up(w * h * (src instanceof Uint32Array ? 4 : 2))
   }
 
   private uploadLut(layer: TileLayerData, s: LayerGL): void {
@@ -973,6 +977,5 @@ export class TileLayerRenderer {
     this.free(s.atlasTex)
     this.free(s.avgTex)
     this.free(s.mipTex)
-    this.free(s.varTex)
   }
 }

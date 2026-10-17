@@ -125,15 +125,15 @@ describe('per-layer stats and TileLayer textures', () => {
     expect(s.layers).toHaveLength(0)
   })
 
-  it('counts lookup-table and variant textures', () => {
+  it('counts lookup-table textures (variant picks live in the index, no table)', () => {
     const { rs, world } = setup()
     const tiles = tileLayer({ variants: { 1: [1, 2] }, animations: { 3: { frames: [3, 4], duration: 0.25 } } })
     tiles.fill(1)
     world.addComponent(world.createEntity(), createTileLayerComponent(tiles))
     rs.update(world, 1 / 60)
-    // index page (u16) + atlas + LUT (4 u32) + variant table (4 u32)
-    expect(rs.stats.tile.textureCount).toBe(4)
-    expect(rs.stats.tile.textureBytes).toBe(64 * 64 * 2 + 64 * 64 * 4 + 16 + 16)
+    // index page (u16) + atlas + LUT (4 u32)
+    expect(rs.stats.tile.textureCount).toBe(3)
+    expect(rs.stats.tile.textureBytes).toBe(64 * 64 * 2 + 64 * 64 * 4 + 16)
     expect(rs.stats.tile.textureUploadBytes).toBe(rs.stats.tile.textureBytes)
     expect(rs.stats.tile.lutUploads).toBe(1)
   })
